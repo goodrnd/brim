@@ -149,9 +149,7 @@ const area = (l: Pt[]) => l.reduce((a, [x, y], i) => {
   return a + x * ny - nx * y;
 }, 0) / 2;
 
-export function slice(positions: Float32Array, set: SliceSettings): SliceResult {
-  const printer = printers[set.printer];
-  const mat = materials[set.material];
+export function slice(positions: Float32Array, set: SliceSettings, printer = printers[set.printer], mat = materials[set.material]): SliceResult {
   const [min, max] = bounds(positions);
   const [ox, oy] = [printer.bed[0] / 2, printer.bed[1] / 2];
   const height = max[2] - min[2];

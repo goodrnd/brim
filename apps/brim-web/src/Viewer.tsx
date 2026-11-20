@@ -4,9 +4,11 @@ import {tokenColor} from './color.ts';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
 
 /** Orbitable preview of a triangle soup on a printer bed. Colours come from the design tokens. */
-export function Viewer({positions, bed, theme}: {positions: Float32Array; bed: [number, number]; theme: string}) {
+export function Viewer({positions, bed, theme, onSnapshot}: {positions: Float32Array; bed: [number, number]; theme: string; onSnapshot?: (url: string) => void}) {
   const host = useRef<HTMLDivElement>(null);
-  const state = useRef<{scene: THREE.Scene; mesh?: THREE.Mesh; grid?: THREE.Object3D; camera: THREE.PerspectiveCamera; controls: OrbitControls}>(null);
+  const state = useRef<{scene: THREE.Scene; mesh?: THREE.Mesh; grid?: THREE.Object3D; camera: THREE.PerspectiveCamera; controls: OrbitControls; snap?: boolean}>(null);
+  const snapshot = useRef(onSnapshot);
+  snapshot.current = onSnapshot;
 
   useEffect(() => {
     const el = host.current!;
@@ -34,6 +36,14 @@ export function Viewer({positions, bed, theme}: {positions: Float32Array; bed: [
     renderer.setAnimationLoop(() => {
       controls.update();
       renderer.render(scene, camera);
+      // Read back in the same frame as the render, so preserveDrawingBuffer is not needed.
+      if (state.current?.snap && snapshot.current && el.clientWidth) {
+        state.current.snap = false;
+        const c = document.createElement('canvas');
+        [c.width, c.height] = [320, Math.round((320 * el.clientHeight) / el.clientWidth)];
+        c.getContext('2d')!.drawImage(renderer.domElement, 0, 0, c.width, c.height);
+        snapshot.current(c.toDataURL('image/webp', 0.8));
+      }
     });
     return () => {
       ro.disconnect();
@@ -71,7 +81,8 @@ export function Viewer({positions, bed, theme}: {positions: Float32Array; bed: [
     const c = geo.boundingSphere!.center;
     s.controls.target.copy(c);
     s.camera.position.set(c.x + r * 1.8, c.y - r * 2.4, c.z + r * 1.6);
-  }, [positions, bed, theme]);
+    s.snap = true;
+  }, [positions, bed[0], bed[1], theme]);
 
   return <div ref={host} className="viewer" />;
 }
