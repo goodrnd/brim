@@ -1,6 +1,6 @@
 import {Button, Field, Input, PageHeader, Stack, Text} from '@earendil-works/elanor-react';
 import {useState, type ReactNode} from 'react';
-import {LoginIcon, LogoutIcon, ViewInArIcon} from './icons.ts';
+import {LoginIcon, LogoutIcon} from './icons.ts';
 
 // shortcut: mock auth, password kept in plain localStorage; replace with a real backend before any real users.
 export interface Account {
@@ -24,8 +24,16 @@ export function Login({account, onLogin}: {account: Account; onLogin: () => void
       <form className="login-card" onSubmit={(e) => (e.preventDefault(), submit())}>
         <Stack gap="large" align="stretch">
           <Stack direction="row" gap="small" align="center">
-            <ViewInArIcon size={24} />
-            <Text render={<strong />}>Brim</Text>
+            <img
+              className="brand-mark"
+              src={`${import.meta.env.BASE_URL}brim-mark.png`}
+              width={72}
+              height={72}
+              alt=""
+            />
+            <Text render={<strong />}>
+              <span style={{fontSize: '3em', lineHeight: 1}}>Brim</span>
+            </Text>
           </Stack>
           <PageHeader.Root>
             <PageHeader.Row>

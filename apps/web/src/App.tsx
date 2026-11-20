@@ -370,7 +370,13 @@ export function App() {
       <TopNavigation.Root className="header">
         <TopNavigation.Identity>
           <Stack direction="row" gap="small" align="center">
-            <ViewInArIcon size={24} />
+            <img
+              className="brand-mark"
+              src={`${import.meta.env.BASE_URL}brim-mark.png`}
+              width={24}
+              height={24}
+              alt=""
+            />
             <Text render={<strong />}>Brim</Text>
           </Stack>
         </TopNavigation.Identity>

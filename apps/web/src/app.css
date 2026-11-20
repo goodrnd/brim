@@ -5,6 +5,10 @@ body {
   color: var(--semantic-color-text-primary);
 }
 
+html[data-color-scheme='dark'] .brand-mark {
+  filter: invert(1);
+}
+
 .header {
   position: sticky;
   inset-block-start: 0;
