@@ -1,11 +1,11 @@
 // LLM intent layer: prompt + current model → Spec or Op[]. Runs server-side (vite.config.ts); the LLM never returns mesh data.
 import {type AssistantMessage, type Context, type Tool, validateToolCall} from '@earendil-works/pi-ai';
-import {arr, num, obj, oneOf, opt} from '@earendil-works/pi-schema';
+import {arr, num, obj, oneOf, opt, type Static} from '@earendil-works/pi-schema';
 import {kinds, newSpec, numFields, type Op, type Spec} from './model.ts';
 
 /** What the client sends: the current model, if any. Meshes are summarised; their triangles stay in the browser. */
-export type Current = {type: 'param'; spec: Spec} | {type: 'mesh'; name: string; size: number[]};
-export type Intent = {type: 'spec'; spec: Spec} | {type: 'ops'; ops: Op[]};
+export type Current = {type: 'param'; spec: Spec} | {type: 'mesh'; name: string; size: Array<number>};
+export type Intent = {type: 'spec'; spec: Spec} | {type: 'ops'; ops: Array<Op>};
 
 const n = (description: string) => opt(num({description}));
 const shape = {
@@ -23,7 +23,21 @@ const shape = {
       corner: n('mm corner radius'),
       segments: n('round resolution; 96 default, 192 smooth, 8 low poly'),
 };
-export const tools: Tool[] = [
+const opSchema = obj({
+  op: oneOf(['set', 'scale', 'rotate', 'add', 'subtract'] as const),
+  field: opt(oneOf(numFields, {description: 'set: the spec field to change'})),
+  value: n('set: new absolute value'),
+  x: n('scale: factor along X (width); 1 = unchanged'),
+  y: n('scale: factor along Y (depth)'),
+  z: n('scale: factor along Z (height)'),
+  axis: opt(oneOf(['x', 'y', 'z'] as const)),
+  degrees: n('rotate: angle'),
+  part: opt(obj(shape, {description: 'add/subtract: the shape to join or cut away'})),
+  at: opt(arr(num(), {minItems: 3, maxItems: 3, description: 'add/subtract: [x, y, z] mm from the model\'s bottom centre to the part\'s bottom centre'})),
+});
+type ShapeArgs = Static<ReturnType<typeof obj<typeof shape>>>;
+type OpArgs = Static<typeof opSchema>;
+export const tools: Array<Tool> = [
   {
     name: 'new_shape',
     description: 'Create a new parametric shape, or replace the current one with a different kind. Omitted fields use defaults.',
@@ -33,21 +47,7 @@ export const tools: Tool[] = [
     name: 'edit',
     description: 'Edit the current model with an ordered list of ops.',
     parameters: obj({
-      ops: arr(
-        obj({
-          op: oneOf(['set', 'scale', 'rotate', 'add', 'subtract'] as const),
-          field: opt(oneOf(numFields, {description: 'set: the spec field to change'})),
-          value: n('set: new absolute value'),
-          x: n('scale: factor along X (width); 1 = unchanged'),
-          y: n('scale: factor along Y (depth)'),
-          z: n('scale: factor along Z (height)'),
-          axis: opt(oneOf(['x', 'y', 'z'] as const)),
-          degrees: n('rotate: angle'),
-          part: opt(obj(shape, {description: 'add/subtract: the shape to join or cut away'})),
-          at: opt(arr(num(), {minItems: 3, maxItems: 3, description: 'add/subtract: [x, y, z] mm from the model\'s bottom centre to the part\'s bottom centre'})),
-        }),
-        {minItems: 1},
-      ),
+      ops: arr(opSchema, {minItems: 1}),
     }),
   },
 ];
@@ -76,40 +76,43 @@ export function buildContext(prompt: string, current?: Current): Context {
 }
 
 /** Validates the model's tool call and turns it into an Intent. Throws with a reason when it does not check out. */
-export function readIntent(msg: AssistantMessage): Intent {
-  if (msg.stopReason === 'error' || msg.stopReason === 'aborted') throw new Error(msg.errorMessage ?? msg.stopReason);
+export function readIntent(msg: Pick<AssistantMessage, 'stopReason' | 'errorMessage' | 'content'>): Intent {
+  if (msg.stopReason === 'error' || msg.stopReason === 'aborted') {throw new Error(msg.errorMessage ?? msg.stopReason);}
   const call = msg.content.find((b) => b.type === 'toolCall');
-  if (!call) throw new Error('model did not call a tool');
+  if (!call) {throw new Error('model did not call a tool');}
   const args = validateToolCall(tools, call);
   if (call.name === 'new_shape') {
     return {type: 'spec', spec: toSpec(args)};
   }
-  return {type: 'ops', ops: (args.ops as Record<string, any>[]).map(toOp)};
+  return {type: 'ops', ops: (args.ops as Array<OpArgs>).map(toOp)};
 }
 
-function toSpec(args: Record<string, any>): Spec {
-  const {kind, ...rest} = args as Partial<Spec> & {kind: Spec['kind']};
-  for (const [k, v] of Object.entries(rest)) if (!(v >= 0)) throw new Error(`${k} must be ≥ 0`);
+function toSpec(args: ShapeArgs): Spec {
+  const {kind, ...rest} = args;
+  for (const [k, v] of Object.entries(rest)) {if (!(v! >= 0)) {throw new Error(`${k} must be ≥ 0`);}}
   return newSpec(kind, rest);
 }
 
-function toOp(o: Record<string, any>): Op {
-  const need = (...keys: string[]) => keys.forEach((k) => { if (o[k] === undefined) throw new Error(`${o.op} needs ${k}`); });
+function toOp(o: OpArgs): Op {
+  const need = <K extends keyof OpArgs>(...keys: Array<K>) => {
+    for (const k of keys) {if (o[k] === undefined) {throw new Error(`${o.op} needs ${k}`);}}
+    return o as OpArgs & Required<Pick<OpArgs, K>>;
+  };
   if (o.op === 'set') {
-    need('field', 'value');
-    if (!(o.value >= 0)) throw new Error(`${o.field} must be ≥ 0`);
-    return {op: 'set', field: o.field, value: o.value};
+    const {field, value} = need('field', 'value');
+    if (!(value >= 0)) {throw new Error(`${field} must be ≥ 0`);}
+    return {op: 'set', field, value};
   }
   if (o.op === 'scale') {
     const [x, y, z] = [o.x ?? 1, o.y ?? 1, o.z ?? 1];
-    if (![x, y, z].every((f) => f > 0 && f <= 100)) throw new Error('scale factors must be in (0, 100]');
+    if (![x, y, z].every((f) => f > 0 && f <= 100)) {throw new Error('scale factors must be in (0, 100]');}
     return {op: 'scale', x, y, z};
   }
   if (o.op === 'add' || o.op === 'subtract') {
-    need('part', 'at');
-    if (!o.at.every((v: number) => Math.abs(v) <= 1000)) throw new Error('at must be within 1 m');
-    return {op: o.op, part: toSpec(o.part), at: o.at};
+    const {part, at} = need('part', 'at');
+    if (!at.every((v) => Math.abs(v) <= 1000)) {throw new Error('at must be within 1 m');}
+    return {op: o.op, part: toSpec(part), at: at as [number, number, number]};
   }
-  need('axis', 'degrees');
-  return {op: 'rotate', axis: o.axis, degrees: o.degrees};
+  const {axis, degrees} = need('axis', 'degrees');
+  return {op: 'rotate', axis, degrees};
 }

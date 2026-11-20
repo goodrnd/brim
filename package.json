@@ -7,6 +7,11 @@
     "dev": "npm run dev -w apps/web",
     "build": "npm run build -w apps/web",
     "preview": "npm run preview -w apps/web",
-    "test": "npm test --workspaces --if-present"
+    "test": "npm test --workspaces --if-present",
+    "lint": "oxlint"
+  },
+  "devDependencies": {
+    "@nkzw/oxlint-config": "^3.0.1",
+    "oxlint": "^1.94.0"
   }
 }

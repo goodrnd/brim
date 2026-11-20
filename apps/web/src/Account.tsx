@@ -1,6 +1,6 @@
 import {Button, Field, Input, PageHeader, Stack, Text} from '@earendil-works/elanor-react';
 import {useState, type ReactNode} from 'react';
-import * as I from './icons.ts';
+import {LoginIcon, LogoutIcon, ViewInArIcon} from './icons.ts';
 
 // shortcut: mock auth, password kept in plain localStorage; replace with a real backend before any real users.
 export interface Account {
@@ -21,7 +21,7 @@ export function Login({account, onLogin}: {account: Account; onLogin: () => void
       <form className="login-card" onSubmit={(e) => (e.preventDefault(), submit())}>
         <Stack gap="large" align="stretch">
           <Stack direction="row" gap="small" align="center">
-            <I.ViewInArIcon size={24} />
+            <ViewInArIcon size={24} />
             <Text render={<strong />}>Brim</Text>
           </Stack>
           <PageHeader.Root>
@@ -37,7 +37,7 @@ export function Login({account, onLogin}: {account: Account; onLogin: () => void
             <Input type="password" autoComplete="current-password" value={password} onValueChange={(v) => (setPassword(v), setError(''))} />
             {error && <Field.Error match>{error}</Field.Error>}
           </Field.Root>
-          <Button type="submit" iconStart={<I.LoginIcon />}>Sign in</Button>
+          <Button type="submit" iconStart={<LoginIcon />}>Sign in</Button>
         </Stack>
       </form>
     </main>
@@ -50,18 +50,18 @@ export function AccountSettings({account, setAccount, onLogout}: {account: Accou
   const [saved, setSaved] = useState(false);
   const changingPassword = !!(draft.current || draft.next || draft.confirm);
   const errors: Record<string, string> = {};
-  if (!draft.name.trim()) errors.name = 'Enter a name.';
-  if (!/^\S+@\S+\.\S+$/.test(draft.email.trim())) errors.email = 'Enter a valid email.';
+  if (!draft.name.trim()) {errors.name = 'Enter a name.';}
+  if (!/^\S+@\S+\.\S+$/.test(draft.email.trim())) {errors.email = 'Enter a valid email.';}
   if (changingPassword) {
-    if (draft.current !== account.password) errors.current = 'Current password is wrong.';
-    if (draft.next.length < 4) errors.next = 'Use at least 4 characters.';
-    if (draft.confirm !== draft.next) errors.confirm = 'Passwords do not match.';
+    if (draft.current !== account.password) {errors.current = 'Current password is wrong.';}
+    if (draft.next.length < 4) {errors.next = 'Use at least 4 characters.';}
+    if (draft.confirm !== draft.next) {errors.confirm = 'Passwords do not match.';}
   }
   const shown = tried ? errors : {};
   const set = (k: keyof typeof draft) => (v: string) => (setDraft((d) => ({...d, [k]: v})), setSaved(false));
   const save = () => {
     setTried(true);
-    if (Object.keys(errors).length) return;
+    if (Object.keys(errors).length) {return;}
     setAccount({...account, name: draft.name.trim(), email: draft.email.trim(), password: changingPassword ? draft.next : account.password});
     setDraft((d) => ({...d, current: '', next: '', confirm: ''}));
     setTried(false);
@@ -81,7 +81,7 @@ export function AccountSettings({account, setAccount, onLogout}: {account: Accou
         <PageHeader.Row>
           <PageHeader.Title level={1}>Account</PageHeader.Title>
           <PageHeader.Actions>
-            <Button hierarchy="secondary" iconStart={<I.LogoutIcon />} onClick={onLogout}>Sign out</Button>
+            <Button hierarchy="secondary" iconStart={<LogoutIcon />} onClick={onLogout}>Sign out</Button>
           </PageHeader.Actions>
         </PageHeader.Row>
         <PageHeader.Description>Signed in as {account.username}.</PageHeader.Description>

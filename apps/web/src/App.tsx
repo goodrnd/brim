@@ -32,7 +32,7 @@ import radiusCss from '@earendil-works/design-tokens/radius.css?url';
 import elanorCss from '@earendil-works/design-tokens/elanor.css?url';
 import lefosCss from '@earendil-works/design-tokens/lefos.css?url';
 import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import * as I from './icons.ts';
+import {AccountCircleIcon, AddIcon, ArrowBackIcon, AutoFixHighIcon, BorderClearIcon, BorderOuterIcon, CloseIcon, ContentCopyIcon, DarkModeIcon, DeleteIcon, DownloadIcon, EditIcon, FolderOpenIcon, HelpIcon, LayersIcon, LightModeIcon, PrintIcon, RestartAltIcon, ScheduleIcon, SettingsIcon, TuneIcon, UndoIcon, UploadFileIcon, ViewInArIcon} from './icons.ts';
 import {LayerPreview} from './LayerPreview.tsx';
 import {applyOps, bounds, buildPositions, describe, editMesh, parsePrompt, toStl, volume, type Model} from '@brim/core/model.ts';
 import type {Current, Intent} from '@brim/core/intent.ts';
@@ -58,38 +58,41 @@ const tweaks = ['make it taller', 'thicker walls', 'more ribs', 'twist it more',
 
 interface Entry {
   prompt: string;
-  changes: string[];
+  changes: Array<string>;
   model: Model;
 }
 interface Part {
   id: string;
   name?: string;
   thumb?: string; // webp data URL of the viewer
-  history: Entry[];
+  history: Array<Entry>;
   edited?: number; // ms timestamp of the last design change or rename
   projectId?: string; // unset: a loose part
 }
 
 const sections = ['design', 'refine', 'print'];
 const modelTitle = (m: Model) => (m.type === 'mesh' ? m.name : 'Untitled ' + m.spec.kind);
-const title = (p: Part) => p.name || modelTitle(p.history[p.history.length - 1].model);
+const title = (p: Part) => p.name || modelTitle(p.history.at(-1)!.model);
 
 // shortcut: imported meshes are not saved and thumbnails share the ~5 MB localStorage quota; move to IndexedDB if people import a lot or keep hundreds of parts.
-const storable = (ps: Part[]) =>
-  ps.map((p) => ({...p, history: p.history.filter((e) => e.model.type === 'param')})).filter((p) => p.history.length);
+const storable = (ps: Array<Part>) =>
+  ps.flatMap((p) => {
+    const history = p.history.filter((e) => e.model.type === 'param');
+    return history.length ? [{...p, history}] : [];
+  });
 
 // Stock Elanor token sets; pi and earendil are currently identical to radius, so they are left out.
 const themes = {'1': radiusCss, '2': elanorCss, '3': lefosCss} as const;
 type Theme = keyof typeof themes;
 type Scheme = 'light' | 'dark';
-const saved = <T extends string>(key: string, ok: readonly T[], fallback: T): T => {
+const saved = <T extends string>(key: string, ok: ReadonlyArray<T>, fallback: T): T => {
   const v = localStorage.getItem(key) as T | null;
   return v && ok.includes(v) ? v : fallback;
 };
 
 /** Swaps the token stylesheet and colour scheme; returns a key that changes once the new tokens apply. */
 function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => saved('brim-theme', Object.keys(themes) as Theme[], '1'));
+  const [theme, setTheme] = useState<Theme>(() => saved('brim-theme', Object.keys(themes) as Array<Theme>, '1'));
   const [scheme, setScheme] = useState<Scheme>(() =>
     saved('brim-scheme', ['light', 'dark'], matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
   );
@@ -103,7 +106,7 @@ function useTheme() {
     document.documentElement.dataset.colorScheme = scheme;
     localStorage.setItem('brim-theme', theme);
     localStorage.setItem('brim-scheme', scheme);
-    if (link.getAttribute('href') === themes[theme]) return done();
+    if (link.getAttribute('href') === themes[theme]) {return done();}
     link.addEventListener('load', done, {once: true});
     link.href = themes[theme];
     return () => link.removeEventListener('load', done);
@@ -133,16 +136,19 @@ async function askLlm(prompt: string, m?: Model): Promise<Intent | undefined> {
   const current: Current | undefined = !m ? undefined : m.type === 'param' ? m : {type: 'mesh', name: m.name, size: ((b) => b[1].map((v, k) => v - b[0][k]))(bounds(m.positions))};
   try {
     const r = await fetch('/api/intent', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({prompt, current})});
-    if (r.ok) return await r.json();
-    if (r.status !== 404) console.warn('brim: LLM intent failed, using the regex parser:', await r.text());
-  } catch {}
+    if (r.ok) {return await r.json();}
+    // oxlint-disable-next-line no-console
+    if (r.status !== 404) {console.warn('brim: LLM intent failed, using the regex parser:', await r.text());}
+  } catch {
+    // offline or server down: fall back to the regex parser
+  }
 }
 
 /** Resolves a prompt to the next history entry, via the LLM when available. */
 async function resolve(prompt: string, m?: Model): Promise<Entry> {
   const intent = await askLlm(prompt, m);
-  if (intent?.type === 'spec') return {prompt, changes: [describe(intent.spec)], model: {type: 'param', spec: intent.spec}};
-  if (intent && m) return {prompt, ...applyOps(m, intent.ops)};
+  if (intent?.type === 'spec') {return {prompt, changes: [describe(intent.spec)], model: {type: 'param', spec: intent.spec}};}
+  if (intent && m) {return {prompt, ...applyOps(m, intent.ops)};}
   if (!m) {
     const {spec, changes} = parsePrompt(prompt);
     return {prompt, changes, model: {type: 'param', spec}};
@@ -162,12 +168,12 @@ export function App() {
   const [borders, setBorders] = useBorders();
   const [account, setAccount] = useStored<Account>('brim-account', () => demoAccount);
   const [signedIn, setSignedIn] = useStored('brim-session', () => false);
-  const [parts, setParts] = useStored<Part[]>('brim-parts', () => [], storable);
-  const [jobs, setJobs] = useStored<Job[]>('brim-jobs', () => []);
+  const [parts, setParts] = useStored<Array<Part>>('brim-parts', () => [], storable);
+  const [jobs, setJobs] = useStored<Array<Job>>('brim-jobs', () => []);
   const [printers, setPrinters] = useStored<Record<string, Printer>>('brim-printers', () => stockPrinters);
   const [materials, setMaterials] = useStored<Record<string, Material>>('brim-materials', () => stockMaterials);
-  const [projects, setProjects] = useStored<Project[]>('brim-projects', () => []);
-  const [notes, setNotes] = useStored<Note[]>('brim-notes', () => []);
+  const [projects, setProjects] = useStored<Array<Project>>('brim-projects', () => []);
+  const [notes, setNotes] = useStored<Array<Note>>('brim-notes', () => []);
   const route = useRoute();
   const page = route[0] === 'model' ? 'part' : (route[0] ?? 'library'); // old #/model/ links still open
   const part = page === 'part' ? parts.find((p) => p.id === route[1]) : undefined;
@@ -175,32 +181,36 @@ export function App() {
   // shortcut: window.prompt for the name; swap for a Modal like RenameButton if it feels rough.
   const newProject = (movePartId?: string) => {
     const name = prompt('Project name')?.trim();
-    if (!name) return;
+    if (!name) {return;}
+    // oxlint-disable-next-line react/purity -- event handler, not render
     const p: Project = {id: crypto.randomUUID(), name, edited: Date.now()};
     setProjects((ps) => [p, ...ps]);
-    if (movePartId) patch(movePartId, (x) => ({...x, projectId: p.id}));
-    else go(`project/${p.id}`);
+    if (movePartId) {patch(movePartId, (x) => ({...x, projectId: p.id}));}
+    else {go(`project/${p.id}`);}
   };
   const deleteProject = (p: Project) => {
     const n = parts.filter((x) => x.projectId === p.id).length;
-    if (!confirm(`Delete project “${p.name}”? Its ${count(n, 'part')} stay in the Library; its ${count(notes.filter((x) => x.projectId === p.id).length, 'note')} are deleted.`)) return;
+    if (!confirm(`Delete project “${p.name}”? Its ${count(n, 'part')} stay in the Library; its ${count(notes.filter((x) => x.projectId === p.id).length, 'note')} are deleted.`)) {return;}
     const r = removeProject(p.id, {projects, parts, notes});
-    setProjects(r.projects), setParts(r.parts), setNotes(r.notes);
+    setProjects(r.projects);
+    setParts(r.parts);
+    setNotes(r.notes);
     go('');
   };
   const section = sections.includes(route[2]) ? route[2] : 'design';
   const setSection = (s: string) => part && go(`part/${part.id}/${s}`);
   const patch = (id: string, f: (p: Part) => Part) => setParts((ps) => ps.map((p) => (p.id === id ? f(p) : p)));
   const edit = (f: (p: Part) => Part) => part && patch(part.id, (p) => ({...f(p), edited: Date.now()}));
-  const setHistory = (f: (h: Entry[]) => Entry[]) => edit((p) => ({...p, history: f(p.history)}));
+  const setHistory = (f: (h: Array<Entry>) => Array<Entry>) => edit((p) => ({...p, history: f(p.history)}));
   const create = (p: Omit<Part, 'id' | 'edited' | 'projectId'> & {projectId?: string}) => {
+    // oxlint-disable-next-line react/purity -- event handler, not render
     const next = {...p, id: crypto.randomUUID(), edited: Date.now()};
     setParts((ps) => [next, ...ps]);
     go(`part/${next.id}/refine`);
   };
   const duplicate = () => part && create({...part, name: title(part) + ' copy'});
   const remove = () => {
-    if (!part || !confirm(`Delete “${title(part)}”? This cannot be undone.`)) return;
+    if (!part || !confirm(`Delete “${title(part)}”? This cannot be undone.`)) {return;}
     setParts((ps) => ps.filter((p) => p.id !== part.id));
     go('');
   };
@@ -211,17 +221,18 @@ export function App() {
     printer: printers[settings.printer] ? settings.printer : Object.keys(printers)[0],
     material: materials[settings.material] ? settings.material : Object.keys(materials)[0],
   };
-  const current = part?.history[part.history.length - 1];
+  const current = part?.history.at(-1);
   const positions = useMemo(
     () => (!current ? new Float32Array() : current.model.type === 'param' ? buildPositions(current.model.spec) : current.model.positions),
+    // oxlint-disable-next-line react/preserve-manual-memoization -- React Compiler is not used; the memo keeps Viewer from rebuilding each render
     [current],
   );
   const printer = printers[sliceSettings.printer];
 
   const generate = async (prompt: string) => {
     const e = await resolve(prompt);
-    if (part) setHistory((h) => [...h, e]);
-    else create({history: [e], projectId: project?.id});
+    if (part) {setHistory((h) => [...h, e]);}
+    else {create({history: [e], projectId: project?.id});}
   };
   const refine = async (prompt: string) => {
     const e = await resolve(prompt, current?.model);
@@ -233,19 +244,19 @@ export function App() {
       const {positions: fixed} = editMesh('', p);
       const entry: Entry = {prompt: `Imported ${file.name}`, changes: [`${fixed.length / 9} triangles`], model: {type: 'mesh', name: file.name.replace(/\.stl$/i, ''), positions: fixed}};
       create({history: [entry], projectId});
-    } catch (e) {
-      alert((e as Error).message);
+    } catch (error) {
+      alert((error as Error).message);
     }
   };
 
-  if (!signedIn) return <Login account={account} onLogin={() => setSignedIn(true)} />;
+  if (!signedIn) {return <Login account={account} onLogin={() => setSignedIn(true)} />;}
 
   return (
     <>
       <TopNavigation.Root className="header">
         <TopNavigation.Identity>
           <Stack direction="row" gap="small" align="center">
-            <I.ViewInArIcon size={24} />
+            <ViewInArIcon size={24} />
             <Text render={<strong />}>Brim</Text>
           </Stack>
         </TopNavigation.Identity>
@@ -260,7 +271,7 @@ export function App() {
               render={<TopNavigation.ActionButton aria-label="Show borders" aria-pressed={borders} />}
               onClick={() => setBorders(!borders)}
             >
-              {borders ? <I.BorderOuterIcon /> : <I.BorderClearIcon />}
+              {borders ? <BorderOuterIcon /> : <BorderClearIcon />}
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Positioner>
@@ -273,7 +284,7 @@ export function App() {
               render={<TopNavigation.ActionButton aria-label={scheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} />}
               onClick={() => setScheme(scheme === 'dark' ? 'light' : 'dark')}
             >
-              {scheme === 'dark' ? <I.LightModeIcon /> : <I.DarkModeIcon />}
+              {scheme === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Positioner>
@@ -292,9 +303,9 @@ export function App() {
               <Sidebar.Content>
                 <SideNavigation.Root aria-label="Workflow" variant={collapsed ? 'compact' : 'default'}>
                   <SideNavigation.List>
-                    {([['library', 'Library', <I.FolderOpenIcon />], ['queue', `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`, <I.ScheduleIcon />], ['settings', 'Printers & materials', <I.SettingsIcon />]] as const).map(([v, label, icon]) => (
+                    {([['library', 'Library', FolderOpenIcon], ['queue', `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`, ScheduleIcon], ['settings', 'Printers & materials', SettingsIcon]] as const).map(([v, label, Icon]) => (
                       <SideNavigation.Item key={v}>
-                        <SideNavigation.Link href={`#/${v === 'library' ? '' : v}`} iconStart={icon} active={page === v || (v === 'library' && (page === 'part' || page === 'new' || page === 'project'))}>{label}</SideNavigation.Link>
+                        <SideNavigation.Link href={`#/${v === 'library' ? '' : v}`} iconStart={<Icon />} active={page === v || (v === 'library' && (page === 'part' || page === 'new' || page === 'project'))}>{label}</SideNavigation.Link>
                       </SideNavigation.Item>
                     ))}
                   </SideNavigation.List>
@@ -304,10 +315,10 @@ export function App() {
                 <SideNavigation.Root aria-label="Printer" variant={collapsed ? 'compact' : 'default'}>
                   <SideNavigation.List>
                     <SideNavigation.Item>
-                      <SideNavigation.Link href={`#/settings/printer/${sliceSettings.printer}`} iconStart={<I.PrintIcon />}>{printer.name}</SideNavigation.Link>
+                      <SideNavigation.Link href={`#/settings/printer/${sliceSettings.printer}`} iconStart={<PrintIcon />}>{printer.name}</SideNavigation.Link>
                     </SideNavigation.Item>
                     <SideNavigation.Item>
-                      <SideNavigation.Link href="#/account" iconStart={<I.AccountCircleIcon />} active={page === 'account'}>{account.name}</SideNavigation.Link>
+                      <SideNavigation.Link href="#/account" iconStart={<AccountCircleIcon />} active={page === 'account'}>{account.name}</SideNavigation.Link>
                     </SideNavigation.Item>
                   </SideNavigation.List>
                 </SideNavigation.Root>
@@ -330,11 +341,11 @@ export function App() {
                 parts={<PartList parts={parts.filter((p) => p.projectId === project.id)} />}
                 actions={<>
                   <RenameButton key={project.id} what="project" name={project.name} onRename={(name) => setProjects((ps) => ps.map((p) => (p.id === project.id ? {...p, name, edited: Date.now()} : p)))} />
-                  <Button hierarchy="secondary" iconStart={<I.DeleteIcon />} onClick={() => deleteProject(project)}>Delete</Button>
+                  <Button hierarchy="secondary" iconStart={<DeleteIcon />} onClick={() => deleteProject(project)}>Delete</Button>
                 </>}
                 partActions={<>
                   <UploadButton compact onFile={(f) => upload(f, project.id)} />
-                  <Button density="compact" iconStart={<I.AddIcon />} onClick={() => go(`new/${project.id}`)}>New part</Button>
+                  <Button density="compact" iconStart={<AddIcon />} onClick={() => go(`new/${project.id}`)}>New part</Button>
                 </>}
               />
             ) : (
@@ -369,7 +380,7 @@ export function App() {
           <Stack gap="xLarge" align="stretch">
             {project && (
               <div>
-                <Button hierarchy="secondary" density="compact" iconStart={<I.ArrowBackIcon />} onClick={() => go(`project/${project.id}`)}>{project.name}</Button>
+                <Button hierarchy="secondary" density="compact" iconStart={<ArrowBackIcon />} onClick={() => go(`project/${project.id}`)}>{project.name}</Button>
               </div>
             )}
             <PageHeader.Root>
@@ -378,10 +389,10 @@ export function App() {
                 <PageHeader.Actions>
                   <ProjectPicker value={project?.id} projects={projects} onChange={(projectId) => patch(part.id, (p) => ({...p, projectId}))} onCreate={() => newProject(part.id)} />
                   <RenameButton key={part.id} what="part" name={title(part)} onRename={(name) => edit((p) => ({...p, name}))} />
-                  <Button hierarchy="secondary" iconStart={<I.ContentCopyIcon />} onClick={duplicate}>Duplicate</Button>
-                  <Button hierarchy="secondary" iconStart={<I.DeleteIcon />} onClick={remove}>Delete</Button>
-                  <Button hierarchy="secondary" iconStart={<I.DownloadIcon />} onClick={() => download(toStl(positions), slug(current.model) + '.stl', 'model/stl')}>STL</Button>
-                  <Button iconStart={<I.PrintIcon />} onClick={() => setSection('print')}>Prepare print</Button>
+                  <Button hierarchy="secondary" iconStart={<ContentCopyIcon />} onClick={duplicate}>Duplicate</Button>
+                  <Button hierarchy="secondary" iconStart={<DeleteIcon />} onClick={remove}>Delete</Button>
+                  <Button hierarchy="secondary" iconStart={<DownloadIcon />} onClick={() => download(toStl(positions), slug(current.model) + '.stl', 'model/stl')}>STL</Button>
+                  <Button iconStart={<PrintIcon />} onClick={() => setSection('print')}>Prepare print</Button>
                 </PageHeader.Actions>
               </PageHeader.Row>
               <PageHeader.Description>
@@ -391,9 +402,9 @@ export function App() {
 
             <Tabs.Root value={section} onValueChange={(v) => setSection(v as string)}>
               <Tabs.List aria-label="Workflow" className="sections">
-                <Tabs.Tab value="design"><I.AutoFixHighIcon />Design</Tabs.Tab>
-                <Tabs.Tab value="refine"><I.TuneIcon />Refine</Tabs.Tab>
-                <Tabs.Tab value="print"><I.PrintIcon />Print files</Tabs.Tab>
+                <Tabs.Tab value="design"><AutoFixHighIcon />Design</Tabs.Tab>
+                <Tabs.Tab value="refine"><TuneIcon />Refine</Tabs.Tab>
+                <Tabs.Tab value="print"><PrintIcon />Print files</Tabs.Tab>
                 <Tabs.Indicator className="sections-indicator" />
               </Tabs.List>
             <Grid.Root>
@@ -410,7 +421,7 @@ export function App() {
                       label="Describe the part"
                       placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
                       action="Generate STL"
-                      icon={<I.AutoFixHighIcon />}
+                      icon={<AutoFixHighIcon />}
                       chips={examples}
                       onSubmit={(p) => generate(p).then(() => setSection('refine'))}
                     />
@@ -422,7 +433,7 @@ export function App() {
                         label="What should change?"
                         placeholder="e.g. 20% bigger, thicker walls, add a 3mm hole"
                         action="Improve"
-                        icon={<I.TuneIcon />}
+                        icon={<TuneIcon />}
                         chips={tweaks}
                         onSubmit={refine}
                       />
@@ -460,7 +471,7 @@ export function App() {
   );
 }
 
-function Library({parts, projects, notes, onUpload, onNewProject}: {parts: Part[]; projects: Project[]; notes: Note[]; onUpload: (f: File) => void; onNewProject: () => void}) {
+function Library({parts, projects, notes, onUpload, onNewProject}: {parts: Array<Part>; projects: Array<Project>; notes: Array<Note>; onUpload: (f: File) => void; onNewProject: () => void}) {
   const loose = parts.filter((p) => isLoose(p, projects));
   return (
     <Stack gap="xLarge" align="stretch">
@@ -469,8 +480,8 @@ function Library({parts, projects, notes, onUpload, onNewProject}: {parts: Part[
           <PageHeader.Title level={1}>Library</PageHeader.Title>
           <PageHeader.Actions>
             <UploadButton onFile={onUpload} />
-            <Button hierarchy="secondary" iconStart={<I.FolderOpenIcon />} onClick={onNewProject}>New project</Button>
-            <Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New part</Button>
+            <Button hierarchy="secondary" iconStart={<FolderOpenIcon />} onClick={onNewProject}>New project</Button>
+            <Button iconStart={<AddIcon />} onClick={() => go('new')}>New part</Button>
           </PageHeader.Actions>
         </PageHeader.Row>
         <PageHeader.Description>{[projects.length ? count(projects.length, 'project') : '', count(parts.length, 'part')].filter(Boolean).join(' · ')}, saved in this browser.</PageHeader.Description>
@@ -483,13 +494,13 @@ function Library({parts, projects, notes, onUpload, onNewProject}: {parts: Part[
         </Stack>
       ) : projects.length ? null : (
         <EmptyState.Root>
-          <EmptyState.Illustration><I.ViewInArIcon size={48} /></EmptyState.Illustration>
+          <EmptyState.Illustration><ViewInArIcon size={48} /></EmptyState.Illustration>
           <EmptyState.Body>
             <EmptyState.Copy>
               <EmptyState.Title level={2}>No parts yet</EmptyState.Title>
               <EmptyState.Description>Describe a part in plain words, or import an STL.</EmptyState.Description>
             </EmptyState.Copy>
-            <EmptyState.Actions><Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New part</Button></EmptyState.Actions>
+            <EmptyState.Actions><Button iconStart={<AddIcon />} onClick={() => go('new')}>New part</Button></EmptyState.Actions>
           </EmptyState.Body>
         </EmptyState.Root>
       )}
@@ -497,12 +508,12 @@ function Library({parts, projects, notes, onUpload, onNewProject}: {parts: Part[
   );
 }
 
-function PartList({parts}: {parts: Part[]}) {
+function PartList({parts}: {parts: Array<Part>}) {
   const sorted = [...parts].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0));
   return (
         <ul className="model-list">
           {sorted.map((p) => {
-            const m = p.history[p.history.length - 1].model;
+            const m = p.history.at(-1)!.model;
             const href = `#/part/${p.id}/design`;
             return (
               <li key={p.id}>
@@ -535,7 +546,7 @@ function NewPart({project, onSubmit}: {project?: Project; onSubmit: (prompt: str
           label="Describe the part"
           placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
           action="Generate part"
-          icon={<I.AutoFixHighIcon />}
+          icon={<AutoFixHighIcon />}
           chips={examples}
           onSubmit={onSubmit}
         />
@@ -550,7 +561,7 @@ function RenameButton({what, name, onRename}: {what: string; name: string; onRen
   const save = () => value.trim() && (onRename(value.trim()), setOpen(false));
   return (
     <Modal.Root open={open} onOpenChange={(o) => (setOpen(o), setValue(name))}>
-      <Modal.Trigger render={<Button hierarchy="secondary" iconStart={<I.EditIcon />} />}>Rename</Modal.Trigger>
+      <Modal.Trigger render={<Button hierarchy="secondary" iconStart={<EditIcon />} />}>Rename</Modal.Trigger>
       <Modal.Portal>
         <Modal.Backdrop />
         <Modal.Viewport>
@@ -578,18 +589,18 @@ function UploadButton({onFile, compact}: {onFile: (f: File) => void; compact?: b
   return (
     <>
       <input ref={input} type="file" accept=".stl" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
-      <Button hierarchy="secondary" density={compact ? 'compact' : undefined} iconStart={<I.UploadFileIcon />} onClick={() => input.current?.click()}>Import STL</Button>
+      <Button hierarchy="secondary" density={compact ? 'compact' : undefined} iconStart={<UploadFileIcon />} onClick={() => input.current?.click()}>Import STL</Button>
     </>
   );
 }
 
-function PromptBox(props: {autoFocus?: boolean; label: string; placeholder: string; action: string; icon: ReactNode; chips: string[]; onSubmit: (p: string) => Promise<void>}) {
+function PromptBox(props: {autoFocus?: boolean; label: string; placeholder: string; action: string; icon: ReactNode; chips: Array<string>; onSubmit: (p: string) => Promise<void>}) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const submit = (p: string) => {
-    if (!p.trim() || busy) return;
+    if (!p.trim() || busy) {return;}
     setBusy(true);
-    props.onSubmit(p.trim()).then(() => setValue('')).finally(() => setBusy(false));
+    void props.onSubmit(p.trim()).then(() => setValue('')).finally(() => setBusy(false));
   };
   return (
     <Stack gap="medium" align="stretch">
@@ -601,7 +612,7 @@ function PromptBox(props: {autoFocus?: boolean; label: string; placeholder: stri
           placeholder={props.placeholder}
           onValueChange={(v) => setValue(v)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(value);
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {submit(value);}
           }}
         />
         <Field.Description>
@@ -620,12 +631,12 @@ function PromptBox(props: {autoFocus?: boolean; label: string; placeholder: stri
   );
 }
 
-function History({history, onUndo, onRestore}: {history: Entry[]; onUndo: () => void; onRestore: (i: number) => void}) {
+function History({history, onUndo, onRestore}: {history: Array<Entry>; onUndo: () => void; onRestore: (i: number) => void}) {
   return (
     <Stack gap="small" align="stretch">
       <Stack direction="row" gap="auto" align="center">
         <Heading level={2} size={5}>History</Heading>
-        <Button hierarchy="secondary" density="compact" iconStart={<I.UndoIcon />} disabled={history.length < 2} onClick={onUndo}>Undo</Button>
+        <Button hierarchy="secondary" density="compact" iconStart={<UndoIcon />} disabled={history.length < 2} onClick={onUndo}>Undo</Button>
       </Stack>
       <ol className="history" reversed>
         {history.map((h, i) => ({h, i})).reverse().map(({h, i}) => (
@@ -636,7 +647,7 @@ function History({history, onUndo, onRestore}: {history: Entry[]; onUndo: () => 
                 <Text className="muted">{h.changes.join(' · ')}</Text>
               </Stack>
               {i < history.length - 1 && (
-                <Button hierarchy="secondary" density="compact" iconStart={<I.RestartAltIcon />} onClick={() => onRestore(i)}>Restore</Button>
+                <Button hierarchy="secondary" density="compact" iconStart={<RestartAltIcon />} onClick={() => onRestore(i)}>Restore</Button>
               )}
             </Stack>
           </li>
@@ -661,10 +672,13 @@ function ModelStats({positions, bed}: {positions: Float32Array; bed: [number, nu
 }
 
 function PrintPanel({theme, positions, settings, setSettings, printers, materials, name, onQueue}: {theme: string; positions: Float32Array; settings: SliceSettings; setSettings: (s: SliceSettings) => void; printers: Record<string, Printer>; materials: Record<string, Material>; name: string; onQueue: (r: SliceResult) => void}) {
-  const [result, setResult] = useState<SliceResult | null>(null);
+  // A result is only valid for the inputs it was sliced from; anything else reads as null.
+  const [sliced, setSliced] = useState<{result: SliceResult; inputs: Array<object>} | null>(null);
+  const inputs = [positions, printers, materials];
+  const result = sliced?.inputs.every((v, i) => v === inputs[i]) ? sliced.result : null;
+  const setResult = (result: SliceResult | null) => setSliced(result && {result, inputs});
   const [layer, setLayer] = useState(0);
   const set = <K extends keyof SliceSettings>(k: K, v: SliceSettings[K]) => (setSettings({...settings, [k]: v}), setResult(null));
-  useEffect(() => setResult(null), [positions, printers, materials]);
   const [min, max] = bounds(positions);
   const extent = Math.max(max[0] - min[0], max[1] - min[1]);
   const bed = printers[settings.printer].bed;
@@ -713,7 +727,7 @@ function PrintPanel({theme, positions, settings, setSettings, printers, material
         Spiral vase mode (single wall, continuous Z)
       </SelectionControlAndLabel>
       <Stack direction="row" gap="small" align="center">
-        <Button iconStart={<I.LayersIcon />} disabled={tooBig} onClick={() => { const r = slice(positions, settings, printers[settings.printer], materials[settings.material]); setResult(r); setLayer(Math.floor(r.layers.length / 2)); }}>
+        <Button iconStart={<LayersIcon />} disabled={tooBig} onClick={() => { const r = slice(positions, settings, printers[settings.printer], materials[settings.material]); setResult(r); setLayer(Math.floor(r.layers.length / 2)); }}>
           Slice
         </Button>
         {tooBig && <Text className="negative">Part is larger than the {printers[settings.printer].name} bed.</Text>}
@@ -738,7 +752,7 @@ function PrintPanel({theme, positions, settings, setSettings, printers, material
               <Stack direction="row" gap="auto" align="center">
                 <Text>Layer {layer + 1} / {result.layers.length} · z {result.layers[layer]?.z.toFixed(2)} mm</Text>
                 <Tooltip.Root>
-                  <Tooltip.Trigger render={<IconButton aria-label="About the preview" />}><I.HelpIcon /></Tooltip.Trigger>
+                  <Tooltip.Trigger render={<IconButton aria-label="About the preview" />}><HelpIcon /></Tooltip.Trigger>
                   <Tooltip.Portal><Tooltip.Positioner><Tooltip.Popup>Walls in the accent colour, infill in grey</Tooltip.Popup></Tooltip.Positioner></Tooltip.Portal>
                 </Tooltip.Root>
               </Stack>
@@ -747,15 +761,15 @@ function PrintPanel({theme, positions, settings, setSettings, printers, material
             </Stack>
           </Card>
           <Stack direction="row" gap="small" wrap="wrap">
-            <Button iconStart={<I.ScheduleIcon />} onClick={() => onQueue(result)}>Add to queue</Button>
-            <Button hierarchy="secondary" iconStart={<I.DownloadIcon />} onClick={() => download(result.gcode, `${name}_${settings.material}_${settings.layer}mm.gcode`, 'text/x-gcode')}>Download G-code</Button>
-            <Button hierarchy="secondary" iconStart={<I.DownloadIcon />} onClick={() => download(toStl(positions), name + '.stl', 'model/stl')}>Download STL</Button>
+            <Button iconStart={<ScheduleIcon />} onClick={() => onQueue(result)}>Add to queue</Button>
+            <Button hierarchy="secondary" iconStart={<DownloadIcon />} onClick={() => download(result.gcode, `${name}_${settings.material}_${settings.layer}mm.gcode`, 'text/x-gcode')}>Download G-code</Button>
+            <Button hierarchy="secondary" iconStart={<DownloadIcon />} onClick={() => download(toStl(positions), name + '.stl', 'model/stl')}>Download STL</Button>
             <GcodeModal gcode={result.gcode} />
           </Stack>
         </Stack>
       ) : (
         <EmptyState.Root>
-          <EmptyState.Illustration><I.LayersIcon size={48} /></EmptyState.Illustration>
+          <EmptyState.Illustration><LayersIcon size={48} /></EmptyState.Illustration>
           <EmptyState.Body>
             <EmptyState.Copy>
               <EmptyState.Title level={2}>Not sliced yet</EmptyState.Title>
@@ -780,7 +794,7 @@ function GcodeModal({gcode}: {gcode: string}) {
           <Modal.Popup>
             <Stack direction="row" align="start" gap="auto">
               <Modal.Title>G-code preview</Modal.Title>
-              <Modal.Close render={<IconButton aria-label="Close" />}><I.CloseIcon /></Modal.Close>
+              <Modal.Close render={<IconButton aria-label="Close" />}><CloseIcon /></Modal.Close>
             </Stack>
             <Modal.Description>First 40 of {gcode.split('\n').length.toLocaleString()} lines.</Modal.Description>
             <Modal.Body>

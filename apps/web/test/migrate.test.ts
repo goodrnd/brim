@@ -7,7 +7,7 @@ const store = (init: Record<string, string>) => {
   return {m, getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k)};
 };
 
-test('moves brim-models to brim-parts and renames job fields', () => {
+void test('moves brim-models to brim-parts and renames job fields', () => {
   const s = store({
     'brim-models': '[{"id":"a"}]',
     'brim-jobs': JSON.stringify([{id: 'j', projectId: 'a', model: 'Box', done: false}]),
@@ -21,7 +21,7 @@ test('moves brim-models to brim-parts and renames job fields', () => {
   assert.deepEqual(s.m, after, 'second run is a no-op');
 });
 
-test('never overwrites existing parts and survives broken jobs', () => {
+void test('never overwrites existing parts and survives broken jobs', () => {
   const s = store({'brim-models': '[{"id":"old"}]', 'brim-parts': '[{"id":"new"}]', 'brim-jobs': '{oops'});
   migrate(s);
   assert.equal(s.m.get('brim-parts'), '[{"id":"new"}]');

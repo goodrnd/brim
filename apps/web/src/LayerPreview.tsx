@@ -11,7 +11,7 @@ export function LayerPreview({layer, extent, theme}: {layer: Layer | undefined; 
     c.width = c.height = size;
     const ctx = c.getContext('2d')!;
     ctx.clearRect(0, 0, size, size);
-    if (!layer) return;
+    if (!layer) {return;}
     const scale = (size * 0.9) / Math.max(extent, 1);
     ctx.setTransform(scale, 0, 0, -scale, size / 2, size / 2);
     ctx.lineCap = ctx.lineJoin = 'round';

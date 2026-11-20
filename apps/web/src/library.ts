@@ -17,10 +17,10 @@ export interface Note {
 type InProject = {projectId?: string};
 
 /** A part is loose when it has no project, or its project no longer exists. */
-export const isLoose = (p: InProject, projects: Project[]) => !p.projectId || !projects.some((x) => x.id === p.projectId);
+export const isLoose = (p: InProject, projects: Array<Project>) => !p.projectId || !projects.some((x) => x.id === p.projectId);
 
 /** Deleting a project keeps its parts (now loose) and drops its notes. */
-export function removeProject<P extends InProject>(id: string, s: {projects: Project[]; parts: P[]; notes: Note[]}) {
+export function removeProject<P extends InProject>(id: string, s: {projects: Array<Project>; parts: Array<P>; notes: Array<Note>}) {
   return {
     projects: s.projects.filter((p) => p.id !== id),
     parts: s.parts.map((p) => (p.projectId === id ? {...p, projectId: undefined} : p)),

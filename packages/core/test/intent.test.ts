@@ -2,14 +2,14 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
-import {createModels, fauxAssistantMessage, fauxProvider, fauxToolCall} from '@earendil-works/pi-ai';
-import {buildContext, readIntent, type Intent} from '../src/intent.ts';
+import {createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, type ToolCall} from '@earendil-works/pi-ai';
+import {buildContext, readIntent, type Current, type Intent} from '../src/intent.ts';
 import {applyOps, parsePrompt} from '../src/model.ts';
 import {cases, sameSpec} from './cases.ts';
 import {paraphrases} from './paraphrases.ts';
 
-type Saved = {prompt: string; current?: any; canonical?: string; content: {name: string; arguments: any}[]; stopReason: string};
-const saved: {cases: Saved[]; paraphrases: Saved[]} = JSON.parse(readFileSync(new URL('./fixtures/llm-replies.json', import.meta.url), 'utf8'));
+type Saved = {prompt: string; current?: Current; canonical?: string; content: Array<{name: string; arguments: ToolCall['arguments']}>; stopReason: string};
+const saved: {cases: Array<Saved>; paraphrases: Array<Saved>} = JSON.parse(readFileSync(new URL('./fixtures/llm-replies.json', import.meta.url), 'utf8'));
 
 const faux = fauxProvider();
 const models = createModels();
@@ -20,7 +20,7 @@ async function replay(r: Saved): Promise<Intent> {
   return readIntent(await models.completeSimple(faux.getModel(), buildContext(r.prompt, r.current)));
 }
 
-test('README prompts resolve to valid specs and ops', async () => {
+void test('README prompts resolve to valid specs and ops', async () => {
   assert.deepEqual(saved.cases.map((c) => c.prompt), cases.map((c) => c.prompt), 'fixtures are stale: npm run record');
   for (const r of saved.cases) {
     const intent = await replay(r);
@@ -35,20 +35,20 @@ test('README prompts resolve to valid specs and ops', async () => {
   }
 });
 
-test('M1 exit: 20+ paraphrases resolve to the README spec', async () => {
+void test('M1 exit: 20+ paraphrases resolve to the README spec', async () => {
   const total = Object.values(paraphrases).flat().length;
   assert.ok(total >= 20);
   assert.equal(saved.paraphrases.length, total, 'fixtures are stale: npm run record');
   let pass = 0;
   for (const r of saved.paraphrases) {
     const intent = await replay(r);
-    if (intent.type === 'spec' && sameSpec(intent.spec, parsePrompt(r.canonical!).spec)) pass++;
+    if (intent.type === 'spec' && sameSpec(intent.spec, parsePrompt(r.canonical!).spec)) {pass++;}
   }
   assert.equal(pass, total);
 });
 
-test('bad tool calls are rejected, not applied', async () => {
-  const bad = (name: string, args: any) => replay({prompt: 'x', content: [{name, arguments: args}], stopReason: 'toolUse'});
+void test('bad tool calls are rejected, not applied', async () => {
+  const bad = (name: string, args: ToolCall['arguments']) => replay({prompt: 'x', content: [{name, arguments: args}], stopReason: 'toolUse'});
   await assert.rejects(bad('new_shape', {kind: 'teapot'}));
   await assert.rejects(bad('new_shape', {kind: 'box', width: -5}));
   await assert.rejects(bad('edit', {ops: [{op: 'set', field: 'positions', value: 1}]}));
@@ -57,10 +57,10 @@ test('bad tool calls are rejected, not applied', async () => {
   await assert.rejects(replay({prompt: 'x', content: [], stopReason: 'stop'}));
 });
 
-test('mesh ops: rotate 180 about X flips, scale scales', () => {
+void test('mesh ops: rotate 180 about X flips, scale scales', () => {
   const m = {type: 'mesh' as const, name: 't', positions: new Float32Array([0, 0, 0, 10, 0, 0, 0, 0, 10])};
   const {model} = applyOps(m, [{op: 'rotate', axis: 'x', degrees: 180}, {op: 'scale', x: 2, y: 2, z: 2}]);
   assert.ok(model.type === 'mesh');
   const z = [...model.positions].filter((_, i) => i % 3 === 2);
-  assert.deepEqual(z.map(Math.round).sort(), [0, 20, 20]); // the top vertex is now at the bottom, rested on z=0
+  assert.deepEqual(z.map(Math.round).sort((a, b) => a - b), [0, 20, 20]); // the top vertex is now at the bottom, rested on z=0
 });

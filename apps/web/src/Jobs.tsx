@@ -1,5 +1,5 @@
 import {Button, Card, Checkbox, EmptyState, Grid, IconButton, PageHeader, Stack, Table} from '@earendil-works/elanor-react';
-import * as I from './icons.ts';
+import {DeleteIcon, OpenInNewIcon, ScheduleIcon} from './icons.ts';
 
 export interface Job {
   id: string;
@@ -17,9 +17,9 @@ export interface Job {
 
 export const hms = (s: number) => `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
 
-export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job[]) => Job[]) => void; onOpen?: (partId: string) => void}) {
+export function Jobs({jobs, setJobs, onOpen}: {jobs: Array<Job>; setJobs: (f: (j: Array<Job>) => Array<Job>) => void; onOpen?: (partId: string) => void}) {
   const queued = jobs.filter((j) => !j.done);
-  const sum = (js: Job[], k: 'seconds' | 'grams') => js.reduce((a, j) => a + j[k], 0);
+  const sum = (js: Array<Job>, k: 'seconds' | 'grams') => js.reduce((a, j) => a + j[k], 0);
   const update = (id: string, patch: Partial<Job> | null) =>
     setJobs((js) => (patch ? js.map((j) => (j.id === id ? {...j, ...patch} : j)) : js.filter((j) => j.id !== id)));
 
@@ -29,7 +29,7 @@ export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job
         <PageHeader.Row>
           <PageHeader.Title level={1}>Print queue</PageHeader.Title>
           <PageHeader.Actions>
-            <Button hierarchy="secondary" iconStart={<I.DeleteIcon />} disabled={jobs.length === queued.length} onClick={() => setJobs((js) => js.filter((j) => !j.done))}>Clear printed</Button>
+            <Button hierarchy="secondary" iconStart={<DeleteIcon />} disabled={jobs.length === queued.length} onClick={() => setJobs((js) => js.filter((j) => !j.done))}>Clear printed</Button>
           </PageHeader.Actions>
         </PageHeader.Row>
         <PageHeader.Description>Sliced jobs you have queued. Tick them off once printed.</PageHeader.Description>
@@ -67,8 +67,8 @@ export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job
                   <Table.Cell align="end">{j.grams.toFixed(1)} g</Table.Cell>
                   <Table.Cell align="end">
                     <Stack direction="row" gap="xSmall">
-                      {onOpen && <IconButton aria-label={`Open ${j.part}`} onClick={() => onOpen(j.partId)}><I.OpenInNewIcon /></IconButton>}
-                      <IconButton aria-label={`Remove ${j.part}`} onClick={() => update(j.id, null)}><I.DeleteIcon /></IconButton>
+                      {onOpen && <IconButton aria-label={`Open ${j.part}`} onClick={() => onOpen(j.partId)}><OpenInNewIcon /></IconButton>}
+                      <IconButton aria-label={`Remove ${j.part}`} onClick={() => update(j.id, null)}><DeleteIcon /></IconButton>
                     </Stack>
                   </Table.Cell>
                 </Table.Row>
@@ -78,7 +78,7 @@ export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job
         </Table.Container>
       ) : (
         <EmptyState.Root>
-          <EmptyState.Illustration><I.ScheduleIcon size={48} /></EmptyState.Illustration>
+          <EmptyState.Illustration><ScheduleIcon size={48} /></EmptyState.Illustration>
           <EmptyState.Body>
             <EmptyState.Copy>
               <EmptyState.Title level={2}>Nothing queued</EmptyState.Title>

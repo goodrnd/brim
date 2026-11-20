@@ -11,7 +11,7 @@ const closed = (p: Float32Array) => {
   return ok;
 };
 
-test('cube joined with a cylinder is closed with the expected volume', () => {
+void test('cube joined with a cylinder is closed with the expected volume', () => {
   const cube: Model = {type: 'param', spec: newSpec('box', {width: 20, depth: 20, height: 20, wall: 0, corner: 0})};
   const {model, changes} = applyOps(cube, [{op: 'add', part: newSpec('cylinder', {width: 10, height: 30, segments: 192}), at: [0, 0, 0]}]);
   assert.ok(model.type === 'mesh' && !changes.some((c) => c.startsWith('skipped')), String(changes));
@@ -22,7 +22,7 @@ test('cube joined with a cylinder is closed with the expected volume', () => {
 });
 
 // shortcut: a cup stands in for Benchy until GOO-53 clears its license; swap in the Benchy fixture then.
-test('a hole cut through an imported mesh leaves it closed', () => {
+void test('a hole cut through an imported mesh leaves it closed', () => {
   const mesh = buildPositions(newSpec('cup'));
   const {positions, changes} = editMesh('drill a 6mm hole', mesh);
   assert.ok(changes.some((c) => c.startsWith('subtract')), String(changes));
@@ -30,7 +30,7 @@ test('a hole cut through an imported mesh leaves it closed', () => {
   assert.ok(volume(positions) < volume(mesh));
 });
 
-test('subtracting everything is skipped, not applied', () => {
+void test('subtracting everything is skipped, not applied', () => {
   const m: Model = {type: 'param', spec: newSpec('cylinder')};
   const {model, changes} = applyOps(m, [{op: 'subtract', part: newSpec('box', {width: 100, depth: 100, height: 100, wall: 0}), at: [0, 0, -10]}]);
   assert.equal(model, m);
