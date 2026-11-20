@@ -590,7 +590,7 @@ export function App() {
                 </EmptyState.Body>
               </EmptyState.Root>
             ) : page === 'home' ? (
-              <Home parts={parts} projects={projects} jobs={jobs} onSubmit={generate} />
+              <Home parts={parts} projects={projects} jobs={jobs} />
             ) : (
               <Library
                 parts={parts}
@@ -781,63 +781,34 @@ export function App() {
   );
 }
 
-function Home({
-  parts,
-  projects,
-  jobs,
-  onSubmit,
-}: {
-  parts: Array<Part>;
-  projects: Array<Project>;
-  jobs: Array<Job>;
-  onSubmit: (prompt: string) => Promise<void>;
-}) {
+function Home({parts, projects, jobs}: {parts: Array<Part>; projects: Array<Project>; jobs: Array<Job>}) {
   const queued = jobs.filter((j) => !j.done);
-  const recent = [...parts].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0)).slice(0, 4);
+  const printed = jobs.filter((j) => j.done);
+  const grams = (js: Array<Job>) => `${js.reduce((a, j) => a + j.grams, 0).toFixed(0)} g`;
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
         <PageHeader.Row>
           <PageHeader.Title level={1}>Home</PageHeader.Title>
         </PageHeader.Row>
-        <PageHeader.Description>Describe a part to start, or pick up where you left off.</PageHeader.Description>
       </PageHeader.Root>
-      <div className="editor">
-        <PromptBox
-          label="New part"
-          placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
-          action="Generate part"
-          icon={<AutoFixHighIcon />}
-          chips={examples}
-          onSubmit={onSubmit}
-        />
-      </div>
       <Grid.Root>
-        <Grid.Item span={{base: 6, medium: 3}}>
+        <Grid.Item span={4}>
           <Card label="Parts" value={parts.length} description={count(projects.length, 'project')} />
         </Grid.Item>
-        <Grid.Item span={{base: 6, medium: 3}}>
-          <Card label="Queued prints" value={queued.length} description={`${jobs.length - queued.length} printed`} />
-        </Grid.Item>
-        <Grid.Item span={{base: 6, medium: 3}}>
-          <Card label="Queue time" value={hms(queued.reduce((a, j) => a + j.seconds, 0))} description="Estimated" />
-        </Grid.Item>
-        <Grid.Item span={{base: 6, medium: 3}}>
+        <Grid.Item span={4}>
           <Card
-            label="Queued filament"
-            value={`${queued.reduce((a, j) => a + j.grams, 0).toFixed(0)} g`}
-            description="Still to print"
+            label="Queued prints"
+            value={queued.length}
+            description={`${hms(queued.reduce((a, j) => a + j.seconds, 0))} · ${grams(queued)}`}
           />
         </Grid.Item>
+        <Grid.Item span={4}>
+          <Card label="Printed" value={printed.length} description={`${grams(printed)} of filament`} />
+        </Grid.Item>
       </Grid.Root>
-      {recent.length > 0 && (
-        <Stack gap="small" align="stretch">
-          <Heading level={2} size={5}>
-            Recent parts · <a href="#/library">View library</a>
-          </Heading>
-          <PartList parts={recent} />
-        </Stack>
-      )}
+      {/* TODO: decide what else belongs on Home. */}
+      <Text className="muted">More coming here — TODO: decide what else belongs on Home.</Text>
     </Stack>
   );
 }
