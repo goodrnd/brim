@@ -786,10 +786,11 @@ export function App() {
   );
 }
 
+const grams = (js: Array<Job>) => `${js.reduce((a, j) => a + j.grams, 0).toFixed(0)} g`;
+
 function Home({parts, projects, jobs}: {parts: Array<Part>; projects: Array<Project>; jobs: Array<Job>}) {
   const queued = jobs.filter((j) => !j.done);
   const printed = jobs.filter((j) => j.done);
-  const grams = (js: Array<Job>) => `${js.reduce((a, j) => a + j.grams, 0).toFixed(0)} g`;
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
