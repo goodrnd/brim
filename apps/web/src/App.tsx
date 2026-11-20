@@ -34,15 +34,17 @@ import lefosCss from '@earendil-works/design-tokens/lefos.css?url';
 import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import * as I from './icons.ts';
 import {LayerPreview} from './LayerPreview.tsx';
-import {applyOps, bounds, buildPositions, describe, editMesh, parsePrompt, toStl, volume, type Model} from './model.ts';
-import type {Current, Intent} from './intent.ts';
-import {materials as stockMaterials, printers as stockPrinters, slice, type Material, type Printer, type SliceResult, type SliceSettings} from './slicer.ts';
+import {applyOps, bounds, buildPositions, describe, editMesh, parsePrompt, toStl, volume, type Model} from '@brim/core/model.ts';
+import type {Current, Intent} from '@brim/core/intent.ts';
+import {materials as stockMaterials, printers as stockPrinters, slice, type Material, type Printer, type SliceResult, type SliceSettings} from '@brim/core/slicer.ts';
 import {hms, Jobs, type Job} from './Jobs.tsx';
 import {Settings} from './Settings.tsx';
 import {AccountSettings, demoAccount, Login, type Account} from './Account.tsx';
 import {go, useRoute} from './route.ts';
 import {useStored} from './store.ts';
 import {parseStl, Viewer} from './Viewer.tsx';
+import {count, edited, isLoose, removeProject, type Note, type Project} from './library.ts';
+import {ProjectList, ProjectPage, ProjectPicker} from './Projects.tsx';
 
 const examples = [
   'twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs',
@@ -59,20 +61,21 @@ interface Entry {
   changes: string[];
   model: Model;
 }
-interface Project {
+interface Part {
   id: string;
   name?: string;
   thumb?: string; // webp data URL of the viewer
   history: Entry[];
   edited?: number; // ms timestamp of the last design change or rename
+  projectId?: string; // unset: a loose part
 }
 
 const sections = ['design', 'refine', 'print'];
 const modelTitle = (m: Model) => (m.type === 'mesh' ? m.name : 'Untitled ' + m.spec.kind);
-const title = (p: Project) => p.name || modelTitle(p.history[p.history.length - 1].model);
+const title = (p: Part) => p.name || modelTitle(p.history[p.history.length - 1].model);
 
-// shortcut: imported meshes are not saved and thumbnails share the ~5 MB localStorage quota; move to IndexedDB if people import a lot or keep hundreds of models.
-const storable = (ps: Project[]) =>
+// shortcut: imported meshes are not saved and thumbnails share the ~5 MB localStorage quota; move to IndexedDB if people import a lot or keep hundreds of parts.
+const storable = (ps: Part[]) =>
   ps.map((p) => ({...p, history: p.history.filter((e) => e.model.type === 'param')})).filter((p) => p.history.length);
 
 // Stock Elanor token sets; pi and earendil are currently identical to radius, so they are left out.
@@ -159,27 +162,46 @@ export function App() {
   const [borders, setBorders] = useBorders();
   const [account, setAccount] = useStored<Account>('brim-account', () => demoAccount);
   const [signedIn, setSignedIn] = useStored('brim-session', () => false);
-  const [projects, setProjects] = useStored<Project[]>('brim-models', () => [], storable);
+  const [parts, setParts] = useStored<Part[]>('brim-parts', () => [], storable);
   const [jobs, setJobs] = useStored<Job[]>('brim-jobs', () => []);
   const [printers, setPrinters] = useStored<Record<string, Printer>>('brim-printers', () => stockPrinters);
   const [materials, setMaterials] = useStored<Record<string, Material>>('brim-materials', () => stockMaterials);
+  const [projects, setProjects] = useStored<Project[]>('brim-projects', () => []);
+  const [notes, setNotes] = useStored<Note[]>('brim-notes', () => []);
   const route = useRoute();
-  const page = route[0] ?? 'library';
-  const project = page === 'model' ? projects.find((p) => p.id === route[1]) : undefined;
-  const section = sections.includes(route[2]) ? route[2] : 'design';
-  const setSection = (s: string) => project && go(`model/${project.id}/${s}`);
-  const patch = (id: string, f: (p: Project) => Project) => setProjects((ps) => ps.map((p) => (p.id === id ? f(p) : p)));
-  const edit = (f: (p: Project) => Project) => project && patch(project.id, (p) => ({...f(p), edited: Date.now()}));
-  const setHistory = (f: (h: Entry[]) => Entry[]) => edit((p) => ({...p, history: f(p.history)}));
-  const create = (p: Omit<Project, 'id' | 'edited'>) => {
-    const next = {...p, id: crypto.randomUUID(), edited: Date.now()};
-    setProjects((ps) => [next, ...ps]);
-    go(`model/${next.id}/refine`);
+  const page = route[0] === 'model' ? 'part' : (route[0] ?? 'library'); // old #/model/ links still open
+  const part = page === 'part' ? parts.find((p) => p.id === route[1]) : undefined;
+  const project = projects.find((p) => p.id === (page === 'project' || page === 'new' ? route[1] : part?.projectId));
+  // shortcut: window.prompt for the name; swap for a Modal like RenameButton if it feels rough.
+  const newProject = (movePartId?: string) => {
+    const name = prompt('Project name')?.trim();
+    if (!name) return;
+    const p: Project = {id: crypto.randomUUID(), name, edited: Date.now()};
+    setProjects((ps) => [p, ...ps]);
+    if (movePartId) patch(movePartId, (x) => ({...x, projectId: p.id}));
+    else go(`project/${p.id}`);
   };
-  const duplicate = () => project && create({...project, name: title(project) + ' copy'});
+  const deleteProject = (p: Project) => {
+    const n = parts.filter((x) => x.projectId === p.id).length;
+    if (!confirm(`Delete project “${p.name}”? Its ${count(n, 'part')} stay in the Library; its ${count(notes.filter((x) => x.projectId === p.id).length, 'note')} are deleted.`)) return;
+    const r = removeProject(p.id, {projects, parts, notes});
+    setProjects(r.projects), setParts(r.parts), setNotes(r.notes);
+    go('');
+  };
+  const section = sections.includes(route[2]) ? route[2] : 'design';
+  const setSection = (s: string) => part && go(`part/${part.id}/${s}`);
+  const patch = (id: string, f: (p: Part) => Part) => setParts((ps) => ps.map((p) => (p.id === id ? f(p) : p)));
+  const edit = (f: (p: Part) => Part) => part && patch(part.id, (p) => ({...f(p), edited: Date.now()}));
+  const setHistory = (f: (h: Entry[]) => Entry[]) => edit((p) => ({...p, history: f(p.history)}));
+  const create = (p: Omit<Part, 'id' | 'edited' | 'projectId'> & {projectId?: string}) => {
+    const next = {...p, id: crypto.randomUUID(), edited: Date.now()};
+    setParts((ps) => [next, ...ps]);
+    go(`part/${next.id}/refine`);
+  };
+  const duplicate = () => part && create({...part, name: title(part) + ' copy'});
   const remove = () => {
-    if (!project || !confirm(`Delete “${title(project)}”? This cannot be undone.`)) return;
-    setProjects((ps) => ps.filter((p) => p.id !== project.id));
+    if (!part || !confirm(`Delete “${title(part)}”? This cannot be undone.`)) return;
+    setParts((ps) => ps.filter((p) => p.id !== part.id));
     go('');
   };
   const [settings, setSettings] = useStored<SliceSettings>('brim-slice', () => ({printer: 'mk4', material: 'pla', layer: 0.2, infill: 15, speed: 60, vase: false}));
@@ -189,7 +211,7 @@ export function App() {
     printer: printers[settings.printer] ? settings.printer : Object.keys(printers)[0],
     material: materials[settings.material] ? settings.material : Object.keys(materials)[0],
   };
-  const current = project?.history[project.history.length - 1];
+  const current = part?.history[part.history.length - 1];
   const positions = useMemo(
     () => (!current ? new Float32Array() : current.model.type === 'param' ? buildPositions(current.model.spec) : current.model.positions),
     [current],
@@ -198,19 +220,19 @@ export function App() {
 
   const generate = async (prompt: string) => {
     const e = await resolve(prompt);
-    if (project) setHistory((h) => [...h, e]);
-    else create({history: [e]});
+    if (part) setHistory((h) => [...h, e]);
+    else create({history: [e], projectId: project?.id});
   };
   const refine = async (prompt: string) => {
     const e = await resolve(prompt, current?.model);
     setHistory((h) => [...h, e]);
   };
-  const upload = async (file: File) => {
+  const upload = async (file: File, projectId?: string) => {
     try {
       const p = parseStl(await file.arrayBuffer());
       const {positions: fixed} = editMesh('', p);
       const entry: Entry = {prompt: `Imported ${file.name}`, changes: [`${fixed.length / 9} triangles`], model: {type: 'mesh', name: file.name.replace(/\.stl$/i, ''), positions: fixed}};
-      create({history: [entry]});
+      create({history: [entry], projectId});
     } catch (e) {
       alert((e as Error).message);
     }
@@ -272,7 +294,7 @@ export function App() {
                   <SideNavigation.List>
                     {([['library', 'Library', <I.FolderOpenIcon />], ['queue', `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`, <I.ScheduleIcon />], ['settings', 'Printers & materials', <I.SettingsIcon />]] as const).map(([v, label, icon]) => (
                       <SideNavigation.Item key={v}>
-                        <SideNavigation.Link href={`#/${v === 'library' ? '' : v}`} iconStart={icon} active={page === v || (v === 'library' && (page === 'model' || page === 'new'))}>{label}</SideNavigation.Link>
+                        <SideNavigation.Link href={`#/${v === 'library' ? '' : v}`} iconStart={icon} active={page === v || (v === 'library' && (page === 'part' || page === 'new' || page === 'project'))}>{label}</SideNavigation.Link>
                       </SideNavigation.Item>
                     ))}
                   </SideNavigation.List>
@@ -296,34 +318,66 @@ export function App() {
 
         <main className="main">
           {page === 'new' ? (
-            <NewModel onSubmit={generate} />
+            <NewPart project={project} onSubmit={generate} />
+          ) : page === 'project' ? (
+            project ? (
+              <ProjectPage
+                key={project.id}
+                project={project}
+                notes={notes}
+                setNotes={setNotes}
+                partCount={parts.filter((p) => p.projectId === project.id).length}
+                parts={<PartList parts={parts.filter((p) => p.projectId === project.id)} />}
+                actions={<>
+                  <RenameButton key={project.id} what="project" name={project.name} onRename={(name) => setProjects((ps) => ps.map((p) => (p.id === project.id ? {...p, name, edited: Date.now()} : p)))} />
+                  <Button hierarchy="secondary" iconStart={<I.DeleteIcon />} onClick={() => deleteProject(project)}>Delete</Button>
+                </>}
+                partActions={<>
+                  <UploadButton compact onFile={(f) => upload(f, project.id)} />
+                  <Button density="compact" iconStart={<I.AddIcon />} onClick={() => go(`new/${project.id}`)}>New part</Button>
+                </>}
+              />
+            ) : (
+              <EmptyState.Root>
+                <EmptyState.Body>
+                  <EmptyState.Copy><EmptyState.Title level={1}>Project not found</EmptyState.Title></EmptyState.Copy>
+                  <EmptyState.Actions><Button onClick={() => go('')}>Back to Library</Button></EmptyState.Actions>
+                </EmptyState.Body>
+              </EmptyState.Root>
+            )
           ) : page === 'queue' ? (
-            <Jobs jobs={jobs} setJobs={setJobs} onOpen={(id) => projects.some((p) => p.id === id) && go(`model/${id}/print`)} />
+            <Jobs jobs={jobs} setJobs={setJobs} onOpen={(id) => parts.some((p) => p.id === id) && go(`part/${id}/print`)} />
           ) : page === 'account' ? (
             <AccountSettings account={account} setAccount={setAccount} onLogout={() => (setSignedIn(false), go(''))} />
           ) : page === 'settings' ? (
             <Settings printers={printers} setPrinters={setPrinters} materials={materials} setMaterials={setMaterials} inUse={sliceSettings} route={route.slice(1)} />
-          ) : !project || !current ? (
-            page === 'model' ? (
+          ) : !part || !current ? (
+            page === 'part' ? (
               <EmptyState.Root>
                 <EmptyState.Body>
                   <EmptyState.Copy>
-                    <EmptyState.Title level={1}>Model not found</EmptyState.Title>
+                    <EmptyState.Title level={1}>Part not found</EmptyState.Title>
                     <EmptyState.Description>It may have been deleted, or it was an imported STL from an earlier visit.</EmptyState.Description>
                   </EmptyState.Copy>
                   <EmptyState.Actions><Button onClick={() => go('')}>Back to Library</Button></EmptyState.Actions>
                 </EmptyState.Body>
               </EmptyState.Root>
             ) : (
-              <Library projects={projects} onUpload={upload} />
+              <Library parts={parts} projects={projects} notes={notes} onUpload={(f) => upload(f)} onNewProject={() => newProject()} />
             )
           ) : (
           <Stack gap="xLarge" align="stretch">
+            {project && (
+              <div>
+                <Button hierarchy="secondary" density="compact" iconStart={<I.ArrowBackIcon />} onClick={() => go(`project/${project.id}`)}>{project.name}</Button>
+              </div>
+            )}
             <PageHeader.Root>
               <PageHeader.Row>
-                <PageHeader.Title level={1}>{title(project)}</PageHeader.Title>
+                <PageHeader.Title level={1}>{title(part)}</PageHeader.Title>
                 <PageHeader.Actions>
-                  <RenameButton key={project.id} name={title(project)} onRename={(name) => edit((p) => ({...p, name}))} />
+                  <ProjectPicker value={project?.id} projects={projects} onChange={(projectId) => patch(part.id, (p) => ({...p, projectId}))} onCreate={() => newProject(part.id)} />
+                  <RenameButton key={part.id} what="part" name={title(part)} onRename={(name) => edit((p) => ({...p, name}))} />
                   <Button hierarchy="secondary" iconStart={<I.ContentCopyIcon />} onClick={duplicate}>Duplicate</Button>
                   <Button hierarchy="secondary" iconStart={<I.DeleteIcon />} onClick={remove}>Delete</Button>
                   <Button hierarchy="secondary" iconStart={<I.DownloadIcon />} onClick={() => download(toStl(positions), slug(current.model) + '.stl', 'model/stl')}>STL</Button>
@@ -345,7 +399,7 @@ export function App() {
             <Grid.Root>
               <Grid.Item span={{base: 'full', medium: 7}}>
                 <Stack gap="medium" align="stretch">
-                  <Viewer positions={positions} bed={[printer.bed[0], printer.bed[1]]} theme={applied} onSnapshot={(thumb) => patch(project.id, (p) => ({...p, thumb}))} />
+                  <Viewer positions={positions} bed={[printer.bed[0], printer.bed[1]]} theme={applied} onSnapshot={(thumb) => patch(part.id, (p) => ({...p, thumb}))} />
                   <ModelStats positions={positions} bed={printer.bed} />
                 </Stack>
               </Grid.Item>
@@ -373,7 +427,7 @@ export function App() {
                         onSubmit={refine}
                       />
                       <History
-                        history={project.history}
+                        history={part.history}
                         onUndo={() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h))}
                         onRestore={(i) => setHistory((h) => [...h, {...h[i], prompt: `Back to step ${i + 1}`, changes: [h[i].prompt]}])}
                       />
@@ -390,7 +444,7 @@ export function App() {
                       name={slug(current.model)}
                       onQueue={(r) => {
                         const s = sliceSettings;
-                        setJobs((js) => [{id: crypto.randomUUID(), projectId: project.id, model: title(project), printer: printers[s.printer].name, material: materials[s.material].name, layer: s.layer, infill: s.infill, seconds: r.seconds, grams: r.grams, at: Date.now(), done: false}, ...js]);
+                        setJobs((js) => [{id: crypto.randomUUID(), partId: part.id, part: title(part), printer: printers[s.printer].name, material: materials[s.material].name, layer: s.layer, infill: s.infill, seconds: r.seconds, grams: r.grams, at: Date.now(), done: false}, ...js]);
                         go('queue');
                       }}
                     />
@@ -406,10 +460,8 @@ export function App() {
   );
 }
 
-const edited = (t?: number) => (t ? 'Edited ' + new Date(t).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'}) : '');
-
-function Library({projects, onUpload}: {projects: Project[]; onUpload: (f: File) => void}) {
-  const sorted = [...projects].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0));
+function Library({parts, projects, notes, onUpload, onNewProject}: {parts: Part[]; projects: Project[]; notes: Note[]; onUpload: (f: File) => void; onNewProject: () => void}) {
+  const loose = parts.filter((p) => isLoose(p, projects));
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
@@ -417,40 +469,27 @@ function Library({projects, onUpload}: {projects: Project[]; onUpload: (f: File)
           <PageHeader.Title level={1}>Library</PageHeader.Title>
           <PageHeader.Actions>
             <UploadButton onFile={onUpload} />
-            <Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New model</Button>
+            <Button hierarchy="secondary" iconStart={<I.FolderOpenIcon />} onClick={onNewProject}>New project</Button>
+            <Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New part</Button>
           </PageHeader.Actions>
         </PageHeader.Row>
-        <PageHeader.Description>{projects.length} {projects.length === 1 ? 'model' : 'models'}, saved in this browser.</PageHeader.Description>
+        <PageHeader.Description>{[projects.length ? count(projects.length, 'project') : '', count(parts.length, 'part')].filter(Boolean).join(' · ')}, saved in this browser.</PageHeader.Description>
       </PageHeader.Root>
-      {sorted.length ? (
-        <ul className="model-list">
-          {sorted.map((p) => {
-            const m = p.history[p.history.length - 1].model;
-            const href = `#/model/${p.id}/design`;
-            return (
-              <li key={p.id}>
-                {/* Image link is a mouse shortcut; the title link is the one keyboard and screen reader users get. */}
-                <a href={href} className="card-link" tabIndex={-1} aria-hidden>
-                  {p.thumb ? <img className="thumb" src={p.thumb} alt="" /> : <div className="thumb" />}
-                </a>
-                <Stack gap="xSmall" align="stretch">
-                  <Heading level={2} size={5}><a href={href} className="card-link">{title(p)}</a></Heading>
-                  <Text className="muted">{m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved'}</Text>
-                  <Text className="muted">{[edited(p.edited), `${p.history.length} ${p.history.length === 1 ? 'step' : 'steps'}`].filter(Boolean).join(' · ')}</Text>
-                </Stack>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
+      <ProjectList projects={projects} parts={parts} notes={notes} />
+      {loose.length ? (
+        <Stack gap="small" align="stretch">
+          {projects.length > 0 && <Heading level={2} size={5}>Loose parts</Heading>}
+          <PartList parts={loose} />
+        </Stack>
+      ) : projects.length ? null : (
         <EmptyState.Root>
           <EmptyState.Illustration><I.ViewInArIcon size={48} /></EmptyState.Illustration>
           <EmptyState.Body>
             <EmptyState.Copy>
-              <EmptyState.Title level={2}>No models yet</EmptyState.Title>
+              <EmptyState.Title level={2}>No parts yet</EmptyState.Title>
               <EmptyState.Description>Describe a part in plain words, or import an STL.</EmptyState.Description>
             </EmptyState.Copy>
-            <EmptyState.Actions><Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New model</Button></EmptyState.Actions>
+            <EmptyState.Actions><Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New part</Button></EmptyState.Actions>
           </EmptyState.Body>
         </EmptyState.Root>
       )}
@@ -458,19 +497,44 @@ function Library({projects, onUpload}: {projects: Project[]; onUpload: (f: File)
   );
 }
 
-function NewModel({onSubmit}: {onSubmit: (prompt: string) => Promise<void>}) {
+function PartList({parts}: {parts: Part[]}) {
+  const sorted = [...parts].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0));
+  return (
+        <ul className="model-list">
+          {sorted.map((p) => {
+            const m = p.history[p.history.length - 1].model;
+            const href = `#/part/${p.id}/design`;
+            return (
+              <li key={p.id}>
+                {/* Image link is a mouse shortcut; the title link is the one keyboard and screen reader users get. */}
+                <a href={href} className="card-link" tabIndex={-1} aria-hidden>
+                  {p.thumb ? <img className="thumb" src={p.thumb} alt="" /> : <div className="thumb" />}
+                </a>
+                <Stack gap="xSmall" align="stretch">
+                  <Heading level={3} size={5}><a href={href} className="card-link">{title(p)}</a></Heading>
+                  <Text className="muted">{m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved'}</Text>
+                  <Text className="muted">{[edited(p.edited), `${p.history.length} ${p.history.length === 1 ? 'step' : 'steps'}`].filter(Boolean).join(' · ')}</Text>
+                </Stack>
+              </li>
+            );
+          })}
+        </ul>
+  );
+}
+
+function NewPart({project, onSubmit}: {project?: Project; onSubmit: (prompt: string) => Promise<void>}) {
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
-        <PageHeader.Row><PageHeader.Title level={1}>New model</PageHeader.Title></PageHeader.Row>
-        <PageHeader.Description>Describe what you want to print, or start from an example.</PageHeader.Description>
+        <PageHeader.Row><PageHeader.Title level={1}>New part</PageHeader.Title></PageHeader.Row>
+        <PageHeader.Description>{project ? `In ${project.name}. ` : ''}Describe what you want to print, or start from an example.</PageHeader.Description>
       </PageHeader.Root>
       <div className="editor">
         <PromptBox
           autoFocus
           label="Describe the part"
           placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
-          action="Generate model"
+          action="Generate part"
           icon={<I.AutoFixHighIcon />}
           chips={examples}
           onSubmit={onSubmit}
@@ -480,7 +544,7 @@ function NewModel({onSubmit}: {onSubmit: (prompt: string) => Promise<void>}) {
   );
 }
 
-function RenameButton({name, onRename}: {name: string; onRename: (name: string) => void}) {
+function RenameButton({what, name, onRename}: {what: string; name: string; onRename: (name: string) => void}) {
   const [value, setValue] = useState(name);
   const [open, setOpen] = useState(false);
   const save = () => value.trim() && (onRename(value.trim()), setOpen(false));
@@ -491,7 +555,7 @@ function RenameButton({name, onRename}: {name: string; onRename: (name: string) 
         <Modal.Backdrop />
         <Modal.Viewport>
           <Modal.Popup>
-            <Modal.Title>Rename model</Modal.Title>
+            <Modal.Title>Rename {what}</Modal.Title>
             <Modal.Body>
               <Field.Root name="name">
                 <Field.Label>Name</Field.Label>
@@ -509,12 +573,12 @@ function RenameButton({name, onRename}: {name: string; onRename: (name: string) 
   );
 }
 
-function UploadButton({onFile}: {onFile: (f: File) => void}) {
+function UploadButton({onFile, compact}: {onFile: (f: File) => void; compact?: boolean}) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
       <input ref={input} type="file" accept=".stl" hidden onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
-      <Button hierarchy="secondary" iconStart={<I.UploadFileIcon />} onClick={() => input.current?.click()}>Import STL</Button>
+      <Button hierarchy="secondary" density={compact ? 'compact' : undefined} iconStart={<I.UploadFileIcon />} onClick={() => input.current?.click()}>Import STL</Button>
     </>
   );
 }
@@ -652,7 +716,7 @@ function PrintPanel({theme, positions, settings, setSettings, printers, material
         <Button iconStart={<I.LayersIcon />} disabled={tooBig} onClick={() => { const r = slice(positions, settings, printers[settings.printer], materials[settings.material]); setResult(r); setLayer(Math.floor(r.layers.length / 2)); }}>
           Slice
         </Button>
-        {tooBig && <Text className="negative">Model is larger than the {printers[settings.printer].name} bed.</Text>}
+        {tooBig && <Text className="negative">Part is larger than the {printers[settings.printer].name} bed.</Text>}
       </Stack>
 
       {result ? (

@@ -6,5 +6,8 @@ import './app.css';
 
 import {createRoot} from 'react-dom/client';
 import {App} from './App.tsx';
+import {migrate} from './migrate.ts';
+
+migrate(localStorage);
 
 createRoot(document.getElementById('root')!).render(<App />);

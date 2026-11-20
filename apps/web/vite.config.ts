@@ -1,6 +1,6 @@
 import {defineConfig, loadEnv, type Plugin} from 'vite';
 import react from '@vitejs/plugin-react';
-import {createIntent} from './src/llm.ts';
+import {createIntent} from '@brim/core/llm.ts';
 
 /** POST /api/intent {prompt, current} → Intent. 404 when no LLM key is set, so the client falls back to the regex parser. */
 const intentApi = (): Plugin => {

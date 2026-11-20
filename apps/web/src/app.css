@@ -166,3 +166,8 @@ textarea.mono {
 .login-card {
   inline-size: min(100%, 24rem);
 }
+
+
+.picker {
+  inline-size: 12rem;
+}

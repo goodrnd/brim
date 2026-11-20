@@ -2,7 +2,7 @@ import {Button, Field, Grid, Heading, IconButton, Input, PageHeader, Stack, Tabl
 import {useState, type ReactNode} from 'react';
 import * as I from './icons.ts';
 import {go} from './route.ts';
-import {materials as stockMaterials, printers as stockPrinters, type Material, type Printer} from './slicer.ts';
+import {materials as stockMaterials, printers as stockPrinters, type Material, type Printer} from '@brim/core/slicer.ts';
 
 type Dict<T> = Record<string, T>;
 type Kind = 'printer' | 'material';

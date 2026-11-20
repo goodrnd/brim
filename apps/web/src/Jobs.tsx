@@ -3,8 +3,8 @@ import * as I from './icons.ts';
 
 export interface Job {
   id: string;
-  projectId: string;
-  model: string;
+  partId: string;
+  part: string; // part title when queued
   printer: string;
   material: string;
   layer: number;
@@ -17,7 +17,7 @@ export interface Job {
 
 export const hms = (s: number) => `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
 
-export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job[]) => Job[]) => void; onOpen?: (projectId: string) => void}) {
+export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job[]) => Job[]) => void; onOpen?: (partId: string) => void}) {
   const queued = jobs.filter((j) => !j.done);
   const sum = (js: Job[], k: 'seconds' | 'grams') => js.reduce((a, j) => a + j[k], 0);
   const update = (id: string, patch: Partial<Job> | null) =>
@@ -46,7 +46,7 @@ export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job
             <Table.Head>
               <Table.Row>
                 <Table.HeaderCell scope="col">Printed</Table.HeaderCell>
-                <Table.HeaderCell scope="col">Model</Table.HeaderCell>
+                <Table.HeaderCell scope="col">Part</Table.HeaderCell>
                 <Table.HeaderCell scope="col">Printer</Table.HeaderCell>
                 <Table.HeaderCell scope="col">Settings</Table.HeaderCell>
                 <Table.HeaderCell scope="col" align="end">Time</Table.HeaderCell>
@@ -58,17 +58,17 @@ export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job
               {jobs.map((j) => (
                 <Table.Row key={j.id}>
                   <Table.Cell>
-                    <Checkbox.Root aria-label={`Mark ${j.model} printed`} checked={j.done} onCheckedChange={(done) => update(j.id, {done})}><Checkbox.Indicator /></Checkbox.Root>
+                    <Checkbox.Root aria-label={`Mark ${j.part} printed`} checked={j.done} onCheckedChange={(done) => update(j.id, {done})}><Checkbox.Indicator /></Checkbox.Root>
                   </Table.Cell>
-                  <Table.Cell><Table.CellPrimary>{j.model}</Table.CellPrimary><Table.CellSecondary>{new Date(j.at).toLocaleString()}</Table.CellSecondary></Table.Cell>
+                  <Table.Cell><Table.CellPrimary>{j.part}</Table.CellPrimary><Table.CellSecondary>{new Date(j.at).toLocaleString()}</Table.CellSecondary></Table.Cell>
                   <Table.Cell>{j.printer}</Table.Cell>
                   <Table.Cell>{j.material} · {j.layer} mm · {j.infill}%</Table.Cell>
                   <Table.Cell align="end">{hms(j.seconds)}</Table.Cell>
                   <Table.Cell align="end">{j.grams.toFixed(1)} g</Table.Cell>
                   <Table.Cell align="end">
                     <Stack direction="row" gap="xSmall">
-                      {onOpen && <IconButton aria-label={`Open ${j.model}`} onClick={() => onOpen(j.projectId)}><I.OpenInNewIcon /></IconButton>}
-                      <IconButton aria-label={`Remove ${j.model}`} onClick={() => update(j.id, null)}><I.DeleteIcon /></IconButton>
+                      {onOpen && <IconButton aria-label={`Open ${j.part}`} onClick={() => onOpen(j.partId)}><I.OpenInNewIcon /></IconButton>}
+                      <IconButton aria-label={`Remove ${j.part}`} onClick={() => update(j.id, null)}><I.DeleteIcon /></IconButton>
                     </Stack>
                   </Table.Cell>
                 </Table.Row>
@@ -82,7 +82,7 @@ export function Jobs({jobs, setJobs, onOpen}: {jobs: Job[]; setJobs: (f: (j: Job
           <EmptyState.Body>
             <EmptyState.Copy>
               <EmptyState.Title level={2}>Nothing queued</EmptyState.Title>
-              <EmptyState.Description>Slice a model under Print files, then choose “Add to queue”.</EmptyState.Description>
+              <EmptyState.Description>Slice a part under Print files, then choose “Add to queue”.</EmptyState.Description>
             </EmptyState.Copy>
           </EmptyState.Body>
         </EmptyState.Root>

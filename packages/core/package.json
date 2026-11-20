@@ -1,0 +1,20 @@
+{
+  "name": "@brim/core",
+  "private": true,
+  "type": "module",
+  "exports": {"./*": "./src/*"},
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "record": "node test/record.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^1.5.2",
+    "@earendil-works/pi-schema": "^1.5.2",
+    "manifold-3d": "^3.5.5",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.187.0"
+  }
+}

@@ -7,7 +7,6 @@ The current prototype focuses on 3D-printable objects: describe a part, refine i
 ## Getting started
 
 ```sh
-cd apps/brim-web
 npm install
 npm run dev
 ```
@@ -30,7 +29,12 @@ Dimensions default to millimeters; centimeters and inches also work.
 
 ## Development
 
-The web app lives in `apps/brim-web`. Run the commands below from that directory.
+An npm workspace:
+
+- `apps/web`: the React app.
+- `packages/core` (`@brim/core`): geometry, ops, intent and slicer. Pure TypeScript, runs in the browser and Node.
+
+The domain vocabulary is in [docs/domain.md](docs/domain.md). Run the commands below from the repo root.
 
 Built with React, TypeScript, Vite, Three.js, and Elanor UI components. Model generation and slicing run locally in the browser.
 
@@ -39,7 +43,7 @@ Built with React, TypeScript, Vite, Three.js, and Elanor UI components. Model ge
 With a key in the repo-root `.env` (see `.env.sample`), the dev server sends each prompt to an LLM through [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai). The LLM returns a typed `Spec` or an `Op[]` edit list, never mesh data, and the resolved ops are shown in the history. The default model is `opencode-go/deepseek-v4.1-flash` (`OPENCODE_API_KEY`). Set `BRIM_MODEL=provider/model-id` to use any pi-ai provider, with that provider's usual key variable. Without a key, or when a call fails, Brim uses the built-in rule-based parser.
 
 ```sh
-npm run record   # re-run the paraphrase set against the real LLM and save replies for npm test
+npm run record -w packages/core   # re-run the paraphrase set against the real LLM and save replies for npm test
 ```
 
 ```sh
