@@ -643,45 +643,46 @@ export function App() {
                     >
                       STL
                     </Button>
-                    <Button iconStart={<PrintIcon />} onClick={() => setSection('print')}>
-                      Prepare print
-                    </Button>
                   </PageHeader.Actions>
                 </PageHeader.Row>
                 <PageHeader.Description>
-                  {current.model.type === 'param' ? describe(current.model.spec) : 'Imported mesh'}
+                  {current.model.type === 'param'
+                    ? describe(current.model.spec)
+                    : `Imported mesh · ${size(positions)
+                        .map((v) => v.toFixed(0))
+                        .join(' × ')} mm`}
                 </PageHeader.Description>
               </PageHeader.Root>
 
-              <Tabs.Root value={section} onValueChange={(v) => setSection(v as string)}>
-                <Tabs.List aria-label="Workflow" className="sections">
-                  <Tabs.Tab value="design">
-                    <AutoFixHighIcon />
-                    Design
-                  </Tabs.Tab>
-                  <Tabs.Tab value="refine">
-                    <TuneIcon />
-                    Refine
-                  </Tabs.Tab>
-                  <Tabs.Tab value="print">
-                    <PrintIcon />
-                    Print files
-                  </Tabs.Tab>
-                  <Tabs.Indicator className="sections-indicator" />
-                </Tabs.List>
-                <Grid.Root>
-                  <Grid.Item span={{base: 'full', medium: 7}}>
-                    <Stack gap="medium" align="stretch">
-                      <Viewer
-                        positions={positions}
-                        bed={[printer.bed[0], printer.bed[1]]}
-                        theme={applied}
-                        onSnapshot={(thumb) => patch(part.id, (p) => ({...p, thumb}))}
-                      />
-                      <ModelStats positions={positions} bed={printer.bed} />
-                    </Stack>
-                  </Grid.Item>
-                  <Grid.Item span={{base: 'full', medium: 5}}>
+              <Grid.Root>
+                <Grid.Item span={{base: 'full', medium: 7}}>
+                  <Stack gap="small" align="stretch">
+                    <Viewer
+                      positions={positions}
+                      bed={[printer.bed[0], printer.bed[1]]}
+                      theme={applied}
+                      onSnapshot={(thumb) => patch(part.id, (p) => ({...p, thumb}))}
+                    />
+                    <ModelFacts positions={positions} printer={printer} />
+                  </Stack>
+                </Grid.Item>
+                <Grid.Item span={{base: 'full', medium: 5}}>
+                  <Tabs.Root value={section} onValueChange={(v) => setSection(v as string)}>
+                    <Tabs.List aria-label="Workflow" className="sections">
+                      <Tabs.Tab value="design">
+                        <AutoFixHighIcon />
+                        Design
+                      </Tabs.Tab>
+                      <Tabs.Tab value="refine">
+                        <TuneIcon />
+                        Refine
+                      </Tabs.Tab>
+                      <Tabs.Tab value="print">
+                        <PrintIcon />
+                        Print files
+                      </Tabs.Tab>
+                      <Tabs.Indicator className="sections-indicator" />
+                    </Tabs.List>
                     <Tabs.Panel value="design" className="panel">
                       <PromptBox
                         key="design"
@@ -747,9 +748,9 @@ export function App() {
                         }}
                       />
                     </Tabs.Panel>
-                  </Grid.Item>
-                </Grid.Root>
-              </Tabs.Root>
+                  </Tabs.Root>
+                </Grid.Item>
+              </Grid.Root>
             </Stack>
           )}
         </main>
@@ -1118,37 +1119,23 @@ function History({
   );
 }
 
-function ModelStats({positions, bed}: {positions: Float32Array; bed: [number, number, number]}) {
-  const [min, max] = bounds(positions);
-  const size = [0, 1, 2].map((k) => max[k] - min[k]);
-  const fits = size.every((v, k) => v <= bed[k]);
+const size = (positions: Float32Array) => ((b) => b[1].map((v, k) => v - b[0][k]))(bounds(positions));
+
+/** One line of geometry facts under the viewer; the size is in the page header. */
+function ModelFacts({positions, printer}: {positions: Float32Array; printer: Printer}) {
+  const fits = size(positions).every((v, k) => v <= printer.bed[k]);
   return (
-    <Grid.Root>
-      <Grid.Item span={{base: 6, medium: 3}}>
-        <Card
-          label="Size (mm)"
-          value={size.map((v) => v.toFixed(0)).join(' × ')}
-          description={fits ? 'Fits the bed' : 'Too big for the bed'}
-        />
-      </Grid.Item>
-      <Grid.Item span={{base: 6, medium: 3}}>
-        <Card
-          label="Volume"
-          value={`${(Math.abs(volume(positions)) / 1000).toFixed(1)} cm³`}
-          description="Solid model"
-        />
-      </Grid.Item>
-      <Grid.Item span={{base: 6, medium: 3}}>
-        <Card label="Triangles" value={(positions.length / 9).toLocaleString()} description="Binary STL" />
-      </Grid.Item>
-      <Grid.Item span={{base: 6, medium: 3}}>
-        <Card
-          label="STL size"
-          value={`${((84 + (positions.length / 9) * 50) / 1024).toFixed(0)} KB`}
-          description="Download from the header"
-        />
-      </Grid.Item>
-    </Grid.Root>
+    <Text className="muted">
+      <span className={fits ? undefined : 'negative'}>
+        {fits ? 'Fits' : 'Too big for'} the {printer.name} bed
+      </span>
+      {[
+        '',
+        `${(Math.abs(volume(positions)) / 1000).toFixed(1)} cm³`,
+        `${(positions.length / 9).toLocaleString()} triangles`,
+        `${((84 + (positions.length / 9) * 50) / 1024).toFixed(0)} KB STL`,
+      ].join(' · ')}
+    </Text>
   );
 }
 
