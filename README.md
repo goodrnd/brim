@@ -32,7 +32,15 @@ Dimensions default to millimeters; centimeters and inches also work.
 
 The web app lives in `apps/brim-web`. Run the commands below from that directory.
 
-Built with React, TypeScript, Vite, Three.js, and Elanor UI components. Model generation and slicing run locally in the browser; no AI API key or backend is required.
+Built with React, TypeScript, Vite, Three.js, and Elanor UI components. Model generation and slicing run locally in the browser.
+
+### AI prompts (optional)
+
+With a key in the repo-root `.env` (see `.env.sample`), the dev server sends each prompt to an LLM through [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai). The LLM returns a typed `Spec` or an `Op[]` edit list, never mesh data, and the resolved ops are shown in the history. The default model is `opencode-go/deepseek-v4.1-flash` (`OPENCODE_API_KEY`). Set `BRIM_MODEL=provider/model-id` to use any pi-ai provider, with that provider's usual key variable. Without a key, or when a call fails, Brim uses the built-in rule-based parser.
+
+```sh
+npm run record   # re-run the paraphrase set against the real LLM and save replies for npm test
+```
 
 ```sh
 npm test         # Run self-checks
@@ -42,6 +50,6 @@ npm run preview  # Serve the production build locally
 
 ## Prototype limits
 
-Descriptions are interpreted by a rule-based parser, not a general-purpose AI model. Supported shapes and edits are limited; imported meshes support scale, stretch, flip, and rotation edits.
+Without an LLM key, descriptions are interpreted by a rule-based parser. Supported shapes and edits are limited; imported meshes support scale, stretch, flip, and rotation edits.
 
 The built-in slicer is experimental. Review generated G-code and verify printer settings before running it on hardware. Export STL to use your usual slicer instead.

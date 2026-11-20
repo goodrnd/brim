@@ -27,3 +27,7 @@ export {LightModeIcon} from '@earendil-works/elanor-icons-react/light-mode';
 export {DarkModeIcon} from '@earendil-works/elanor-icons-react/dark-mode';
 export {BorderOuterIcon} from '@earendil-works/elanor-icons-react/border-outer';
 export {BorderClearIcon} from '@earendil-works/elanor-icons-react/border-clear';
+export {ArrowBackIcon} from '@earendil-works/elanor-icons-react/arrow-back';
+export {LoginIcon} from '@earendil-works/elanor-icons-react/login';
+export {LogoutIcon} from '@earendil-works/elanor-icons-react/logout';
+export {AccountCircleIcon} from '@earendil-works/elanor-icons-react/account-circle';

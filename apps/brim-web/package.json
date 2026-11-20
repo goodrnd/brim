@@ -6,7 +6,8 @@
     "test": "node --test test/*.test.ts",
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "record": "node test/record.ts"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +18,9 @@
     "@earendil-works/elanor-fonts": "^0.1.0",
     "@earendil-works/elanor-icons-react": "^0.1.0",
     "@earendil-works/elanor-react": "^0.1.1",
+    "@earendil-works/pi-ai": "^1.5.2",
+    "@earendil-works/pi-schema": "^1.5.2",
+    "manifold-3d": "^3.5.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "three": "^0.187.0"

@@ -10,6 +10,7 @@ import {
   Grid,
   Heading,
   IconButton,
+  Input,
   InlineCode,
   KeyboardKey,
   KeyValue,
@@ -21,7 +22,6 @@ import {
   SideNavigation,
   Sidebar,
   Stack,
-  Table,
   Tabs,
   Text,
   TextArea,
@@ -34,8 +34,14 @@ import lefosCss from '@earendil-works/design-tokens/lefos.css?url';
 import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import * as I from './icons.ts';
 import {LayerPreview} from './LayerPreview.tsx';
-import {bounds, buildPositions, describe, editMesh, parsePrompt, toStl, volume, type Model} from './model.ts';
-import {materials, printers, slice, type SliceResult, type SliceSettings} from './slicer.ts';
+import {applyOps, bounds, buildPositions, describe, editMesh, parsePrompt, toStl, volume, type Model} from './model.ts';
+import type {Current, Intent} from './intent.ts';
+import {materials as stockMaterials, printers as stockPrinters, slice, type Material, type Printer, type SliceResult, type SliceSettings} from './slicer.ts';
+import {hms, Jobs, type Job} from './Jobs.tsx';
+import {Settings} from './Settings.tsx';
+import {AccountSettings, demoAccount, Login, type Account} from './Account.tsx';
+import {go, useRoute} from './route.ts';
+import {useStored} from './store.ts';
 import {parseStl, Viewer} from './Viewer.tsx';
 
 const examples = [
@@ -53,6 +59,21 @@ interface Entry {
   changes: string[];
   model: Model;
 }
+interface Project {
+  id: string;
+  name?: string;
+  thumb?: string; // webp data URL of the viewer
+  history: Entry[];
+  edited?: number; // ms timestamp of the last design change or rename
+}
+
+const sections = ['design', 'refine', 'print'];
+const modelTitle = (m: Model) => (m.type === 'mesh' ? m.name : 'Untitled ' + m.spec.kind);
+const title = (p: Project) => p.name || modelTitle(p.history[p.history.length - 1].model);
+
+// shortcut: imported meshes are not saved and thumbnails share the ~5 MB localStorage quota; move to IndexedDB if people import a lot or keep hundreds of models.
+const storable = (ps: Project[]) =>
+  ps.map((p) => ({...p, history: p.history.filter((e) => e.model.type === 'param')})).filter((p) => p.history.length);
 
 // Stock Elanor token sets; pi and earendil are currently identical to radius, so they are left out.
 const themes = {'1': radiusCss, '2': elanorCss, '3': lefosCss} as const;
@@ -104,49 +125,98 @@ const download = (data: BlobPart, name: string, type: string) => {
   a.click();
   URL.revokeObjectURL(a.href);
 };
+/** Asks the dev server's LLM; undefined when none is configured or it fails, so callers use the regex parser. */
+async function askLlm(prompt: string, m?: Model): Promise<Intent | undefined> {
+  const current: Current | undefined = !m ? undefined : m.type === 'param' ? m : {type: 'mesh', name: m.name, size: ((b) => b[1].map((v, k) => v - b[0][k]))(bounds(m.positions))};
+  try {
+    const r = await fetch('/api/intent', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({prompt, current})});
+    if (r.ok) return await r.json();
+    if (r.status !== 404) console.warn('brim: LLM intent failed, using the regex parser:', await r.text());
+  } catch {}
+}
+
+/** Resolves a prompt to the next history entry, via the LLM when available. */
+async function resolve(prompt: string, m?: Model): Promise<Entry> {
+  const intent = await askLlm(prompt, m);
+  if (intent?.type === 'spec') return {prompt, changes: [describe(intent.spec)], model: {type: 'param', spec: intent.spec}};
+  if (intent && m) return {prompt, ...applyOps(m, intent.ops)};
+  if (!m) {
+    const {spec, changes} = parsePrompt(prompt);
+    return {prompt, changes, model: {type: 'param', spec}};
+  }
+  if (m.type === 'param') {
+    const {spec, changes} = parsePrompt(prompt, m.spec);
+    return {prompt, changes: changes.length ? changes : ['nothing I understood, so no change'], model: {type: 'param', spec}};
+  }
+  const {positions: p, changes} = editMesh(prompt, m.positions);
+  return {prompt, changes: changes.length ? changes : ['imported meshes support scale, taller, wider, flip, rotate and drilling a hole'], model: {...m, positions: p}};
+}
+
 const slug = (m: Model) => (m.type === 'mesh' ? m.name : m.spec.kind + '-' + Math.round(m.spec.width) + 'mm');
-const hms = (s: number) => `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
 
 export function App() {
   const {theme, setTheme, scheme, setScheme, applied} = useTheme();
   const [borders, setBorders] = useBorders();
-  const [history, setHistory] = useState<Entry[]>(() => {
-    const prompt = examples[0];
-    const {spec, changes} = parsePrompt(prompt);
-    return [{prompt, changes, model: {type: 'param', spec}}];
-  });
-  const [tab, setTab] = useState('design');
-  const [settings, setSettings] = useState<SliceSettings>({printer: 'mk4', material: 'pla', layer: 0.2, infill: 15, speed: 60, vase: false});
-  const current = history[history.length - 1];
+  const [account, setAccount] = useStored<Account>('brim-account', () => demoAccount);
+  const [signedIn, setSignedIn] = useStored('brim-session', () => false);
+  const [projects, setProjects] = useStored<Project[]>('brim-models', () => [], storable);
+  const [jobs, setJobs] = useStored<Job[]>('brim-jobs', () => []);
+  const [printers, setPrinters] = useStored<Record<string, Printer>>('brim-printers', () => stockPrinters);
+  const [materials, setMaterials] = useStored<Record<string, Material>>('brim-materials', () => stockMaterials);
+  const route = useRoute();
+  const page = route[0] ?? 'library';
+  const project = page === 'model' ? projects.find((p) => p.id === route[1]) : undefined;
+  const section = sections.includes(route[2]) ? route[2] : 'design';
+  const setSection = (s: string) => project && go(`model/${project.id}/${s}`);
+  const patch = (id: string, f: (p: Project) => Project) => setProjects((ps) => ps.map((p) => (p.id === id ? f(p) : p)));
+  const edit = (f: (p: Project) => Project) => project && patch(project.id, (p) => ({...f(p), edited: Date.now()}));
+  const setHistory = (f: (h: Entry[]) => Entry[]) => edit((p) => ({...p, history: f(p.history)}));
+  const create = (p: Omit<Project, 'id' | 'edited'>) => {
+    const next = {...p, id: crypto.randomUUID(), edited: Date.now()};
+    setProjects((ps) => [next, ...ps]);
+    go(`model/${next.id}/refine`);
+  };
+  const duplicate = () => project && create({...project, name: title(project) + ' copy'});
+  const remove = () => {
+    if (!project || !confirm(`Delete “${title(project)}”? This cannot be undone.`)) return;
+    setProjects((ps) => ps.filter((p) => p.id !== project.id));
+    go('');
+  };
+  const [settings, setSettings] = useStored<SliceSettings>('brim-slice', () => ({printer: 'mk4', material: 'pla', layer: 0.2, infill: 15, speed: 60, vase: false}));
+  // Fall back when the chosen printer or material was deleted or reset away.
+  const sliceSettings = {
+    ...settings,
+    printer: printers[settings.printer] ? settings.printer : Object.keys(printers)[0],
+    material: materials[settings.material] ? settings.material : Object.keys(materials)[0],
+  };
+  const current = project?.history[project.history.length - 1];
   const positions = useMemo(
-    () => (current.model.type === 'param' ? buildPositions(current.model.spec) : current.model.positions),
+    () => (!current ? new Float32Array() : current.model.type === 'param' ? buildPositions(current.model.spec) : current.model.positions),
     [current],
   );
-  const printer = printers[settings.printer];
+  const printer = printers[sliceSettings.printer];
 
-  const generate = (prompt: string) => {
-    const {spec, changes} = parsePrompt(prompt);
-    setHistory((h) => [...h, {prompt, changes, model: {type: 'param', spec}}]);
+  const generate = async (prompt: string) => {
+    const e = await resolve(prompt);
+    if (project) setHistory((h) => [...h, e]);
+    else create({history: [e]});
   };
-  const refine = (prompt: string) => {
-    const m = current.model;
-    if (m.type === 'param') {
-      const {spec, changes} = parsePrompt(prompt, m.spec);
-      setHistory((h) => [...h, {prompt, changes: changes.length ? changes : ['nothing I understood, so no change'], model: {type: 'param', spec}}]);
-    } else {
-      const {positions: p, changes} = editMesh(prompt, m.positions);
-      setHistory((h) => [...h, {prompt, changes: changes.length ? changes : ['imported meshes support scale, taller, wider, flip and rotate'], model: {...m, positions: p}}]);
-    }
+  const refine = async (prompt: string) => {
+    const e = await resolve(prompt, current?.model);
+    setHistory((h) => [...h, e]);
   };
   const upload = async (file: File) => {
     try {
       const p = parseStl(await file.arrayBuffer());
       const {positions: fixed} = editMesh('', p);
-      setHistory((h) => [...h, {prompt: `Imported ${file.name}`, changes: [`${fixed.length / 9} triangles`], model: {type: 'mesh', name: file.name.replace(/\.stl$/i, ''), positions: fixed}}]);
+      const entry: Entry = {prompt: `Imported ${file.name}`, changes: [`${fixed.length / 9} triangles`], model: {type: 'mesh', name: file.name.replace(/\.stl$/i, ''), positions: fixed}};
+      create({history: [entry]});
     } catch (e) {
       alert((e as Error).message);
     }
   };
+
+  if (!signedIn) return <Login account={account} onLogin={() => setSignedIn(true)} />;
 
   return (
     <>
@@ -199,23 +269,23 @@ export function App() {
               <Sidebar.Header><Sidebar.Trigger /></Sidebar.Header>
               <Sidebar.Content>
                 <SideNavigation.Root aria-label="Workflow" variant={collapsed ? 'compact' : 'default'}>
-                  <SideNavigation.Group>
-                    <SideNavigation.GroupLabel>Workflow</SideNavigation.GroupLabel>
-                    <SideNavigation.List>
-                      {([['design', '1 · Design', <I.AutoFixHighIcon />], ['refine', '2 · Refine', <I.TuneIcon />], ['print', '3 · Print files', <I.PrintIcon />]] as const).map(([v, label, icon]) => (
-                        <SideNavigation.Item key={v}>
-                          <SideNavigation.Link href="#" iconStart={icon} active={tab === v} onClick={(e) => (e.preventDefault(), setTab(v))}>{label}</SideNavigation.Link>
-                        </SideNavigation.Item>
-                      ))}
-                    </SideNavigation.List>
-                  </SideNavigation.Group>
+                  <SideNavigation.List>
+                    {([['library', 'Library', <I.FolderOpenIcon />], ['queue', `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`, <I.ScheduleIcon />], ['settings', 'Printers & materials', <I.SettingsIcon />]] as const).map(([v, label, icon]) => (
+                      <SideNavigation.Item key={v}>
+                        <SideNavigation.Link href={`#/${v === 'library' ? '' : v}`} iconStart={icon} active={page === v || (v === 'library' && (page === 'model' || page === 'new'))}>{label}</SideNavigation.Link>
+                      </SideNavigation.Item>
+                    ))}
+                  </SideNavigation.List>
                 </SideNavigation.Root>
               </Sidebar.Content>
               <Sidebar.Footer>
                 <SideNavigation.Root aria-label="Printer" variant={collapsed ? 'compact' : 'default'}>
                   <SideNavigation.List>
                     <SideNavigation.Item>
-                      <SideNavigation.Link href="#" iconStart={<I.PrintIcon />} onClick={(e) => (e.preventDefault(), setTab('print'))}>{printer.name}</SideNavigation.Link>
+                      <SideNavigation.Link href={`#/settings/printer/${sliceSettings.printer}`} iconStart={<I.PrintIcon />}>{printer.name}</SideNavigation.Link>
+                    </SideNavigation.Item>
+                    <SideNavigation.Item>
+                      <SideNavigation.Link href="#/account" iconStart={<I.AccountCircleIcon />} active={page === 'account'}>{account.name}</SideNavigation.Link>
                     </SideNavigation.Item>
                   </SideNavigation.List>
                 </SideNavigation.Root>
@@ -225,14 +295,39 @@ export function App() {
         </Sidebar.Root>
 
         <main className="main">
+          {page === 'new' ? (
+            <NewModel onSubmit={generate} />
+          ) : page === 'queue' ? (
+            <Jobs jobs={jobs} setJobs={setJobs} onOpen={(id) => projects.some((p) => p.id === id) && go(`model/${id}/print`)} />
+          ) : page === 'account' ? (
+            <AccountSettings account={account} setAccount={setAccount} onLogout={() => (setSignedIn(false), go(''))} />
+          ) : page === 'settings' ? (
+            <Settings printers={printers} setPrinters={setPrinters} materials={materials} setMaterials={setMaterials} inUse={sliceSettings} route={route.slice(1)} />
+          ) : !project || !current ? (
+            page === 'model' ? (
+              <EmptyState.Root>
+                <EmptyState.Body>
+                  <EmptyState.Copy>
+                    <EmptyState.Title level={1}>Model not found</EmptyState.Title>
+                    <EmptyState.Description>It may have been deleted, or it was an imported STL from an earlier visit.</EmptyState.Description>
+                  </EmptyState.Copy>
+                  <EmptyState.Actions><Button onClick={() => go('')}>Back to Library</Button></EmptyState.Actions>
+                </EmptyState.Body>
+              </EmptyState.Root>
+            ) : (
+              <Library projects={projects} onUpload={upload} />
+            )
+          ) : (
           <Stack gap="xLarge" align="stretch">
             <PageHeader.Root>
               <PageHeader.Row>
-                <PageHeader.Title level={1}>{current.model.type === 'mesh' ? current.model.name : 'Untitled ' + current.model.spec.kind}</PageHeader.Title>
+                <PageHeader.Title level={1}>{title(project)}</PageHeader.Title>
                 <PageHeader.Actions>
-                  <UploadButton onFile={upload} />
+                  <RenameButton key={project.id} name={title(project)} onRename={(name) => edit((p) => ({...p, name}))} />
+                  <Button hierarchy="secondary" iconStart={<I.ContentCopyIcon />} onClick={duplicate}>Duplicate</Button>
+                  <Button hierarchy="secondary" iconStart={<I.DeleteIcon />} onClick={remove}>Delete</Button>
                   <Button hierarchy="secondary" iconStart={<I.DownloadIcon />} onClick={() => download(toStl(positions), slug(current.model) + '.stl', 'model/stl')}>STL</Button>
-                  <Button iconStart={<I.PrintIcon />} onClick={() => setTab('print')}>Prepare print</Button>
+                  <Button iconStart={<I.PrintIcon />} onClick={() => setSection('print')}>Prepare print</Button>
                 </PageHeader.Actions>
               </PageHeader.Row>
               <PageHeader.Description>
@@ -240,21 +335,21 @@ export function App() {
               </PageHeader.Description>
             </PageHeader.Root>
 
+            <Tabs.Root value={section} onValueChange={(v) => setSection(v as string)}>
+              <Tabs.List aria-label="Workflow" className="sections">
+                <Tabs.Tab value="design"><I.AutoFixHighIcon />Design</Tabs.Tab>
+                <Tabs.Tab value="refine"><I.TuneIcon />Refine</Tabs.Tab>
+                <Tabs.Tab value="print"><I.PrintIcon />Print files</Tabs.Tab>
+                <Tabs.Indicator className="sections-indicator" />
+              </Tabs.List>
             <Grid.Root>
               <Grid.Item span={{base: 'full', medium: 7}}>
                 <Stack gap="medium" align="stretch">
-                  <Viewer positions={positions} bed={[printer.bed[0], printer.bed[1]]} theme={applied} />
+                  <Viewer positions={positions} bed={[printer.bed[0], printer.bed[1]]} theme={applied} onSnapshot={(thumb) => patch(project.id, (p) => ({...p, thumb}))} />
                   <ModelStats positions={positions} bed={printer.bed} />
                 </Stack>
               </Grid.Item>
               <Grid.Item span={{base: 'full', medium: 5}}>
-                <Tabs.Root value={tab} onValueChange={(v) => setTab(v as string)}>
-                  <Tabs.List aria-label="Workflow">
-                    <Tabs.Tab value="design">Design</Tabs.Tab>
-                    <Tabs.Tab value="refine">Refine</Tabs.Tab>
-                    <Tabs.Tab value="print">Print files</Tabs.Tab>
-                    <Tabs.Indicator />
-                  </Tabs.List>
                   <Tabs.Panel value="design" className="panel">
                     <PromptBox
                       key="design"
@@ -263,7 +358,7 @@ export function App() {
                       action="Generate STL"
                       icon={<I.AutoFixHighIcon />}
                       chips={examples}
-                      onSubmit={(p) => (generate(p), setTab('refine'))}
+                      onSubmit={(p) => generate(p).then(() => setSection('refine'))}
                     />
                   </Tabs.Panel>
                   <Tabs.Panel value="refine" className="panel">
@@ -277,19 +372,140 @@ export function App() {
                         chips={tweaks}
                         onSubmit={refine}
                       />
-                      <History history={history} onUndo={() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h))} />
+                      <History
+                        history={project.history}
+                        onUndo={() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h))}
+                        onRestore={(i) => setHistory((h) => [...h, {...h[i], prompt: `Back to step ${i + 1}`, changes: [h[i].prompt]}])}
+                      />
                     </Stack>
                   </Tabs.Panel>
                   <Tabs.Panel value="print" className="panel">
-                    <PrintPanel theme={applied} positions={positions} settings={settings} setSettings={setSettings} name={slug(current.model)} />
+                    <PrintPanel
+                      theme={applied}
+                      positions={positions}
+                      settings={sliceSettings}
+                      setSettings={setSettings}
+                      printers={printers}
+                      materials={materials}
+                      name={slug(current.model)}
+                      onQueue={(r) => {
+                        const s = sliceSettings;
+                        setJobs((js) => [{id: crypto.randomUUID(), projectId: project.id, model: title(project), printer: printers[s.printer].name, material: materials[s.material].name, layer: s.layer, infill: s.infill, seconds: r.seconds, grams: r.grams, at: Date.now(), done: false}, ...js]);
+                        go('queue');
+                      }}
+                    />
                   </Tabs.Panel>
-                </Tabs.Root>
               </Grid.Item>
             </Grid.Root>
+            </Tabs.Root>
           </Stack>
+          )}
         </main>
       </div>
     </>
+  );
+}
+
+const edited = (t?: number) => (t ? 'Edited ' + new Date(t).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'}) : '');
+
+function Library({projects, onUpload}: {projects: Project[]; onUpload: (f: File) => void}) {
+  const sorted = [...projects].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0));
+  return (
+    <Stack gap="xLarge" align="stretch">
+      <PageHeader.Root>
+        <PageHeader.Row>
+          <PageHeader.Title level={1}>Library</PageHeader.Title>
+          <PageHeader.Actions>
+            <UploadButton onFile={onUpload} />
+            <Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New model</Button>
+          </PageHeader.Actions>
+        </PageHeader.Row>
+        <PageHeader.Description>{projects.length} {projects.length === 1 ? 'model' : 'models'}, saved in this browser.</PageHeader.Description>
+      </PageHeader.Root>
+      {sorted.length ? (
+        <ul className="model-list">
+          {sorted.map((p) => {
+            const m = p.history[p.history.length - 1].model;
+            const href = `#/model/${p.id}/design`;
+            return (
+              <li key={p.id}>
+                {/* Image link is a mouse shortcut; the title link is the one keyboard and screen reader users get. */}
+                <a href={href} className="card-link" tabIndex={-1} aria-hidden>
+                  {p.thumb ? <img className="thumb" src={p.thumb} alt="" /> : <div className="thumb" />}
+                </a>
+                <Stack gap="xSmall" align="stretch">
+                  <Heading level={2} size={5}><a href={href} className="card-link">{title(p)}</a></Heading>
+                  <Text className="muted">{m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved'}</Text>
+                  <Text className="muted">{[edited(p.edited), `${p.history.length} ${p.history.length === 1 ? 'step' : 'steps'}`].filter(Boolean).join(' · ')}</Text>
+                </Stack>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <EmptyState.Root>
+          <EmptyState.Illustration><I.ViewInArIcon size={48} /></EmptyState.Illustration>
+          <EmptyState.Body>
+            <EmptyState.Copy>
+              <EmptyState.Title level={2}>No models yet</EmptyState.Title>
+              <EmptyState.Description>Describe a part in plain words, or import an STL.</EmptyState.Description>
+            </EmptyState.Copy>
+            <EmptyState.Actions><Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New model</Button></EmptyState.Actions>
+          </EmptyState.Body>
+        </EmptyState.Root>
+      )}
+    </Stack>
+  );
+}
+
+function NewModel({onSubmit}: {onSubmit: (prompt: string) => Promise<void>}) {
+  return (
+    <Stack gap="xLarge" align="stretch">
+      <PageHeader.Root>
+        <PageHeader.Row><PageHeader.Title level={1}>New model</PageHeader.Title></PageHeader.Row>
+        <PageHeader.Description>Describe what you want to print, or start from an example.</PageHeader.Description>
+      </PageHeader.Root>
+      <div className="editor">
+        <PromptBox
+          autoFocus
+          label="Describe the part"
+          placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
+          action="Generate model"
+          icon={<I.AutoFixHighIcon />}
+          chips={examples}
+          onSubmit={onSubmit}
+        />
+      </div>
+    </Stack>
+  );
+}
+
+function RenameButton({name, onRename}: {name: string; onRename: (name: string) => void}) {
+  const [value, setValue] = useState(name);
+  const [open, setOpen] = useState(false);
+  const save = () => value.trim() && (onRename(value.trim()), setOpen(false));
+  return (
+    <Modal.Root open={open} onOpenChange={(o) => (setOpen(o), setValue(name))}>
+      <Modal.Trigger render={<Button hierarchy="secondary" iconStart={<I.EditIcon />} />}>Rename</Modal.Trigger>
+      <Modal.Portal>
+        <Modal.Backdrop />
+        <Modal.Viewport>
+          <Modal.Popup>
+            <Modal.Title>Rename model</Modal.Title>
+            <Modal.Body>
+              <Field.Root name="name">
+                <Field.Label>Name</Field.Label>
+                <Input value={value} onValueChange={(v) => setValue(v)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+              </Field.Root>
+            </Modal.Body>
+            <Modal.Actions>
+              <Modal.Close render={<Button hierarchy="secondary" />}>Cancel</Modal.Close>
+              <Button disabled={!value.trim()} onClick={save}>Save</Button>
+            </Modal.Actions>
+          </Modal.Popup>
+        </Modal.Viewport>
+      </Modal.Portal>
+    </Modal.Root>
   );
 }
 
@@ -303,14 +519,20 @@ function UploadButton({onFile}: {onFile: (f: File) => void}) {
   );
 }
 
-function PromptBox(props: {label: string; placeholder: string; action: string; icon: ReactNode; chips: string[]; onSubmit: (p: string) => void}) {
+function PromptBox(props: {autoFocus?: boolean; label: string; placeholder: string; action: string; icon: ReactNode; chips: string[]; onSubmit: (p: string) => Promise<void>}) {
   const [value, setValue] = useState('');
-  const submit = (p: string) => p.trim() && (props.onSubmit(p.trim()), setValue(''));
+  const [busy, setBusy] = useState(false);
+  const submit = (p: string) => {
+    if (!p.trim() || busy) return;
+    setBusy(true);
+    props.onSubmit(p.trim()).then(() => setValue('')).finally(() => setBusy(false));
+  };
   return (
     <Stack gap="medium" align="stretch">
       <Field.Root name="prompt">
         <Field.Label>{props.label}</Field.Label>
         <TextArea
+          autoFocus={props.autoFocus}
           value={value}
           placeholder={props.placeholder}
           onValueChange={(v) => setValue(v)}
@@ -323,29 +545,36 @@ function PromptBox(props: {label: string; placeholder: string; action: string; i
         </Field.Description>
       </Field.Root>
       <Stack direction="row" gap="small">
-        <Button iconStart={props.icon} disabled={!value.trim()} onClick={() => submit(value)}>{props.action}</Button>
+        <Button iconStart={props.icon} disabled={!value.trim() || busy} onClick={() => submit(value)}>{busy ? 'Thinking…' : props.action}</Button>
       </Stack>
       <Stack direction="row" gap="xSmall" wrap="wrap">
         {props.chips.map((c) => (
-          <Button key={c} hierarchy="secondary" density="compact" onClick={() => submit(c)}>{c}</Button>
+          <Button key={c} hierarchy="secondary" density="compact" disabled={busy} onClick={() => submit(c)}>{c}</Button>
         ))}
       </Stack>
     </Stack>
   );
 }
 
-function History({history, onUndo}: {history: Entry[]; onUndo: () => void}) {
+function History({history, onUndo, onRestore}: {history: Entry[]; onUndo: () => void; onRestore: (i: number) => void}) {
   return (
     <Stack gap="small" align="stretch">
       <Stack direction="row" gap="auto" align="center">
         <Heading level={2} size={5}>History</Heading>
         <Button hierarchy="secondary" density="compact" iconStart={<I.UndoIcon />} disabled={history.length < 2} onClick={onUndo}>Undo</Button>
       </Stack>
-      <ol className="history">
-        {history.slice().reverse().map((h, i) => (
-          <li key={history.length - i}>
-            <Text><InlineCode>{h.prompt}</InlineCode></Text>
-            <Text className="muted">{h.changes.join(' · ')}</Text>
+      <ol className="history" reversed>
+        {history.map((h, i) => ({h, i})).reverse().map(({h, i}) => (
+          <li key={i}>
+            <Stack direction="row" gap="auto" align="start">
+              <Stack gap="xSmall">
+                <Text><InlineCode>{h.prompt}</InlineCode></Text>
+                <Text className="muted">{h.changes.join(' · ')}</Text>
+              </Stack>
+              {i < history.length - 1 && (
+                <Button hierarchy="secondary" density="compact" iconStart={<I.RestartAltIcon />} onClick={() => onRestore(i)}>Restore</Button>
+              )}
+            </Stack>
           </li>
         ))}
       </ol>
@@ -367,11 +596,11 @@ function ModelStats({positions, bed}: {positions: Float32Array; bed: [number, nu
   );
 }
 
-function PrintPanel({theme, positions, settings, setSettings, name}: {theme: string; positions: Float32Array; settings: SliceSettings; setSettings: (s: SliceSettings) => void; name: string}) {
+function PrintPanel({theme, positions, settings, setSettings, printers, materials, name, onQueue}: {theme: string; positions: Float32Array; settings: SliceSettings; setSettings: (s: SliceSettings) => void; printers: Record<string, Printer>; materials: Record<string, Material>; name: string; onQueue: (r: SliceResult) => void}) {
   const [result, setResult] = useState<SliceResult | null>(null);
   const [layer, setLayer] = useState(0);
   const set = <K extends keyof SliceSettings>(k: K, v: SliceSettings[K]) => (setSettings({...settings, [k]: v}), setResult(null));
-  useEffect(() => setResult(null), [positions]);
+  useEffect(() => setResult(null), [positions, printers, materials]);
   const [min, max] = bounds(positions);
   const extent = Math.max(max[0] - min[0], max[1] - min[1]);
   const bed = printers[settings.printer].bed;
@@ -420,7 +649,7 @@ function PrintPanel({theme, positions, settings, setSettings, name}: {theme: str
         Spiral vase mode (single wall, continuous Z)
       </SelectionControlAndLabel>
       <Stack direction="row" gap="small" align="center">
-        <Button iconStart={<I.LayersIcon />} disabled={tooBig} onClick={() => { const r = slice(positions, settings); setResult(r); setLayer(Math.floor(r.layers.length / 2)); }}>
+        <Button iconStart={<I.LayersIcon />} disabled={tooBig} onClick={() => { const r = slice(positions, settings, printers[settings.printer], materials[settings.material]); setResult(r); setLayer(Math.floor(r.layers.length / 2)); }}>
           Slice
         </Button>
         {tooBig && <Text className="negative">Model is larger than the {printers[settings.printer].name} bed.</Text>}
@@ -454,7 +683,8 @@ function PrintPanel({theme, positions, settings, setSettings, name}: {theme: str
             </Stack>
           </Card>
           <Stack direction="row" gap="small" wrap="wrap">
-            <Button iconStart={<I.DownloadIcon />} onClick={() => download(result.gcode, `${name}_${settings.material}_${settings.layer}mm.gcode`, 'text/x-gcode')}>Download G-code</Button>
+            <Button iconStart={<I.ScheduleIcon />} onClick={() => onQueue(result)}>Add to queue</Button>
+            <Button hierarchy="secondary" iconStart={<I.DownloadIcon />} onClick={() => download(result.gcode, `${name}_${settings.material}_${settings.layer}mm.gcode`, 'text/x-gcode')}>Download G-code</Button>
             <Button hierarchy="secondary" iconStart={<I.DownloadIcon />} onClick={() => download(toStl(positions), name + '.stl', 'model/stl')}>Download STL</Button>
             <GcodeModal gcode={result.gcode} />
           </Stack>
@@ -471,28 +701,6 @@ function PrintPanel({theme, positions, settings, setSettings, name}: {theme: str
         </EmptyState.Root>
       )}
 
-      <Table.Container>
-        <Table.Root aria-label="Material presets">
-          <Table.Head>
-            <Table.Row>
-              <Table.HeaderCell scope="col">Material</Table.HeaderCell>
-              <Table.HeaderCell scope="col">Nozzle</Table.HeaderCell>
-              <Table.HeaderCell scope="col">Bed</Table.HeaderCell>
-              <Table.HeaderCell scope="col">Fan</Table.HeaderCell>
-            </Table.Row>
-          </Table.Head>
-          <Table.Body>
-            {Object.entries(materials).map(([k, m]) => (
-              <Table.Row key={k}>
-                <Table.Cell><Table.CellPrimary>{m.name}</Table.CellPrimary><Table.CellSecondary>{m.density} g/cm³</Table.CellSecondary></Table.Cell>
-                <Table.Cell>{m.nozzle} °C</Table.Cell>
-                <Table.Cell>{m.bed} °C</Table.Cell>
-                <Table.Cell>{Math.round((m.fan / 255) * 100)}%</Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
-      </Table.Container>
     </Stack>
   );
 }
