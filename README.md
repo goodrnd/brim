@@ -15,7 +15,7 @@ Open the local URL printed by Vite.
 
 ## Make something
 
-1. **Design:** describe a part, or import an existing STL.
+1. **Design:** describe a part, or import an existing STL, 3MF or OBJ file.
 2. **Refine:** ask for changes like “make it taller,” “thicker walls,” or “scale to 80%.” Preview the result in 3D and undo changes as needed.
 3. **Print files:** export an STL, or choose a printer and material, slice the model, inspect its layers, and download G-code.
 

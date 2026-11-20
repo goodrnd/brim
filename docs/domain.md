@@ -20,7 +20,7 @@ Printer · Material         profiles
 - **Part**: the one printable, editable object. Digital. Its `history` is a list of Entries, each a full snapshot. The last Entry is the current state; undo pops it, restore appends a copy of an earlier one.
 - **Entry**: `{prompt, changes, model}`. `model` is the geometry: `param` (a `Spec`, rebuilt on demand) or `mesh` (triangles; imports and anything after a boolean op).
 - **Model**: the geometry type in `@brim/core/model.ts`. Not a user-facing term; the UI says "part".
-- **File**: reference material kept as uploaded (photos, PDFs, datasheets, someone else's STL). Digital. "Make part from file" creates a Part from an STL and leaves the File as the original.
+- **File**: reference material kept as uploaded (photos, PDFs, datasheets, someone else's STL or 3MF). Digital. "Make part from file" creates a Part from a mesh file (STL, 3MF, OBJ) and leaves the File as the original.
 - **Component**: something you buy rather than print (screws, magnets, bearings, a board): name, optional link and notes, and `onHand`, the count you have. Physical. It has no history; a different spec is a different Component.
 - **Project**: a name, its Notes, and Uses of Library items.
 - **Use**: `{projectId, itemId, qty}` links a Project to a Part, File or Component. `qty` is how many to print or how many are needed; Files ignore it. One item can have Uses in many Projects.

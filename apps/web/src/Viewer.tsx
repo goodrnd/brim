@@ -131,24 +131,3 @@ export function Viewer({
 
   return <div ref={host} className="viewer" />;
 }
-
-/** Parses binary or ASCII STL into a triangle soup. */
-export function parseStl(buf: ArrayBuffer): Float32Array {
-  const dv = new DataView(buf);
-  const n = buf.byteLength >= 84 ? dv.getUint32(80, true) : 0;
-  if (n > 0 && 84 + n * 50 === buf.byteLength) {
-    const out = new Float32Array(n * 9);
-    for (let t = 0; t < n; t++) {
-      for (let k = 0; k < 9; k++) {
-        out[t * 9 + k] = dv.getFloat32(84 + t * 50 + 12 + k * 4, true);
-      }
-    }
-    return out;
-  }
-  const text = new TextDecoder().decode(buf);
-  const nums = [...text.matchAll(/vertex\s+(\S+)\s+(\S+)\s+(\S+)/g)].flatMap((m) => [+m[1], +m[2], +m[3]]);
-  if (!nums.length || nums.some(Number.isNaN)) {
-    throw new Error('Not a valid STL file');
-  }
-  return new Float32Array(nums);
-}

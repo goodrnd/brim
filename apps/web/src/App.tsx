@@ -86,7 +86,8 @@ import {Settings} from './Settings.tsx';
 import {AccountSettings, demoAccount, Login, type Account} from './Account.tsx';
 import {go, useRoute} from './route.ts';
 import {useStored} from './store.ts';
-import {parseStl, Viewer} from './Viewer.tsx';
+import {meshFormats, parseMesh} from './mesh.ts';
+import {Viewer} from './Viewer.tsx';
 import {
   count,
   edited,
@@ -366,12 +367,12 @@ export function App() {
   };
   const upload = async (file: File, projectId?: string) => {
     try {
-      const p = parseStl(await file.arrayBuffer());
+      const p = parseMesh(file.name, await file.arrayBuffer());
       const {positions: fixed} = editMesh('', p);
       const entry: Entry = {
         prompt: `Imported ${file.name}`,
         changes: [`${fixed.length / 9} triangles`],
-        model: {type: 'mesh', name: file.name.replace(/\.stl$/i, ''), positions: fixed},
+        model: {type: 'mesh', name: file.name.replace(/\.[^.]+$/, ''), positions: fixed},
       };
       create({history: [entry]}, projectId ? [projectId] : []);
     } catch (error) {
@@ -580,7 +581,7 @@ export function App() {
                   <EmptyState.Copy>
                     <EmptyState.Title level={1}>Part not found</EmptyState.Title>
                     <EmptyState.Description>
-                      It may have been deleted, or it was an imported STL from an earlier visit.
+                      It may have been deleted, or it was an imported model from an earlier visit.
                     </EmptyState.Description>
                   </EmptyState.Copy>
                   <EmptyState.Actions>
@@ -896,7 +897,9 @@ function Library({
           <EmptyState.Body>
             <EmptyState.Copy>
               <EmptyState.Title level={2}>No parts yet</EmptyState.Title>
-              <EmptyState.Description>Describe a part in plain words, or import an STL.</EmptyState.Description>
+              <EmptyState.Description>
+                Describe a part in plain words, or import an STL, 3MF or OBJ file.
+              </EmptyState.Description>
             </EmptyState.Copy>
             <EmptyState.Actions>
               <Button iconStart={<AddIcon />} onClick={() => go('new')}>
@@ -1011,7 +1014,7 @@ function UploadButton({onFile, compact}: {onFile: (f: File) => void; compact?: b
       <input
         ref={input}
         type="file"
-        accept=".stl"
+        accept={meshFormats}
         hidden
         onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
       />
@@ -1021,7 +1024,7 @@ function UploadButton({onFile, compact}: {onFile: (f: File) => void; compact?: b
         iconStart={<UploadFileIcon />}
         onClick={() => input.current?.click()}
       >
-        Import STL
+        Import model
       </Button>
     </>
   );
