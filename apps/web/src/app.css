@@ -169,12 +169,52 @@ textarea.mono {
 
 .login {
   display: grid;
-  place-items: center;
+  grid-template-columns: 1fr 1fr;
   min-block-size: 100dvh;
+}
+.login > * {
+  display: grid;
+  place-content: center;
   padding: var(--semantic-dimension-space-padding-large);
 }
-.login-card {
-  inline-size: min(100%, 24rem);
+.login-pitch {
+  position: relative;
+}
+/* Inset divider: separates the halves without a full-height line or a second background. */
+.login-pitch::after {
+  content: '';
+  position: absolute;
+  inset-block: 15%;
+  inset-inline-end: 0;
+  border-inline-end: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+}
+.login-pitch > * {
+  max-inline-size: 32rem;
+}
+.login-card > * {
+  inline-size: min(100vw - 3rem, 24rem);
+}
+.login-features {
+  display: grid;
+  gap: var(--semantic-dimension-space-gap-large);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.login-features li {
+  display: flex;
+  gap: var(--semantic-dimension-space-gap-medium);
+}
+@media (width < 48rem) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+  .login-pitch::after {
+    inset-block: auto 0;
+    inset-inline: 15%;
+    border-inline-end: none;
+    border-block-end: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+  }
 }
 
 .picker {

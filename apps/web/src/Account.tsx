@@ -1,6 +1,12 @@
-import {Button, Field, Input, PageHeader, Stack, Text} from '@earendil-works/elanor-react';
+import {Button, Field, Heading, Input, PageHeader, Stack, Text} from '@earendil-works/elanor-react';
 import {useState, type ReactNode} from 'react';
-import {LoginIcon, LogoutIcon} from './icons.ts';
+import {AutoFixHighIcon, FolderOpenIcon, LoginIcon, LogoutIcon, PrintIcon} from './icons.ts';
+
+const features = [
+  [AutoFixHighIcon, 'Create parts', 'Start from a reference or a description, then refine until it fits.'],
+  [FolderOpenIcon, 'Organize projects', 'Combine parts into projects, with notes alongside.'],
+  [PrintIcon, 'Print', 'Slice for your printers and materials, and keep a queue of what to print next.'],
+] as const;
 
 // shortcut: mock auth, password kept in plain localStorage; replace with a real backend before any real users.
 export interface Account {
@@ -21,8 +27,8 @@ export function Login({account, onLogin}: {account: Account; onLogin: () => void
       : setError('Wrong username or password.');
   return (
     <main className="login">
-      <form className="login-card" onSubmit={(e) => (e.preventDefault(), submit())}>
-        <Stack gap="large" align="stretch">
+      <section className="login-pitch">
+        <Stack gap="xLarge" align="stretch">
           <Stack direction="row" gap="small" align="center">
             <img
               className="brand-mark"
@@ -35,6 +41,27 @@ export function Login({account, onLogin}: {account: Account; onLogin: () => void
               <span style={{fontSize: '3em', lineHeight: 1}}>Brim</span>
             </Text>
           </Stack>
+          <Heading level={2} variant="marketing" size={2}>
+            From idea to printed part.
+          </Heading>
+          <Text className="muted">
+            Brim is a workspace for designing, organizing and printing 3D parts. No CAD needed.
+          </Text>
+          <ul className="login-features">
+            {features.map(([Icon, title, body]) => (
+              <li key={title}>
+                <Icon />
+                <Stack gap="xSmall" align="stretch">
+                  <Text render={<strong />}>{title}</Text>
+                  <Text className="muted">{body}</Text>
+                </Stack>
+              </li>
+            ))}
+          </ul>
+        </Stack>
+      </section>
+      <form className="login-card" onSubmit={(e) => (e.preventDefault(), submit())}>
+        <Stack gap="large" align="stretch">
           <PageHeader.Root>
             <PageHeader.Row>
               <PageHeader.Title level={1}>Sign in</PageHeader.Title>
