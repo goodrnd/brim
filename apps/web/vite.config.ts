@@ -6,14 +6,24 @@ import {createIntent} from '@brim/core/llm.ts';
 const setup: Plugin['configureServer'] = async (server) => {
   const intent = await createIntent();
   // oxlint-disable-next-line no-console
-  console.log(intent ? `brim: LLM intent on ${process.env.BRIM_MODEL || 'default model'}` : 'brim: no LLM key, using the regex parser');
+  console.log(
+    intent
+      ? `brim: LLM intent on ${process.env.BRIM_MODEL || 'default model'}`
+      : 'brim: no LLM key, using the regex parser',
+  );
   server.middlewares.use('/api/intent', async (req, res) => {
-    if (!intent || req.method !== 'POST') {return ((res.statusCode = 404), res.end());}
+    if (!intent || req.method !== 'POST') {
+      return ((res.statusCode = 404), res.end());
+    }
     let body = '';
-    for await (const chunk of req) {body += chunk;}
+    for await (const chunk of req) {
+      body += chunk;
+    }
     try {
       const {prompt, current} = JSON.parse(body);
-      if (typeof prompt !== 'string' || prompt.length > 2000) {throw new Error('bad prompt');}
+      if (typeof prompt !== 'string' || prompt.length > 2000) {
+        throw new Error('bad prompt');
+      }
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify(await intent(prompt, current)));
     } catch (error) {
@@ -22,7 +32,11 @@ const setup: Plugin['configureServer'] = async (server) => {
     }
   });
 };
-const intentApi = (): Plugin => ({name: 'brim-intent', configureServer: setup, configurePreviewServer: setup as Plugin['configurePreviewServer']});
+const intentApi = (): Plugin => ({
+  name: 'brim-intent',
+  configureServer: setup,
+  configurePreviewServer: setup as Plugin['configurePreviewServer'],
+});
 
 export default defineConfig(({mode}) => {
   // .env lives at the repo root; load every var (not just VITE_*) into process.env for the server only.

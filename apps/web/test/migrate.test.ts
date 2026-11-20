@@ -4,7 +4,12 @@ import {migrate} from '../src/migrate.ts';
 
 const store = (init: Record<string, string>) => {
   const m = new Map(Object.entries(init));
-  return {m, getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k)};
+  return {
+    m,
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+  };
 };
 
 void test('moves brim-models to brim-parts and renames job fields', () => {

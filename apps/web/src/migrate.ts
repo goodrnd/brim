@@ -1,13 +1,19 @@
 // One-time localStorage upgrades. Runs before the app reads storage; each step is a no-op once done.
 type Storage = Pick<globalThis.Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-const rename = ({projectId, model, ...j}: {projectId?: string; model?: string}) => ({...j, partId: projectId, part: model});
+const rename = ({projectId, model, ...j}: {projectId?: string; model?: string}) => ({
+  ...j,
+  partId: projectId,
+  part: model,
+});
 
 export function migrate(s: Storage) {
   // Project → Part rename: library key and job fields.
   const models = s.getItem('brim-models');
   if (models !== null) {
-    if (s.getItem('brim-parts') === null) {s.setItem('brim-parts', models);}
+    if (s.getItem('brim-parts') === null) {
+      s.setItem('brim-parts', models);
+    }
     s.removeItem('brim-models');
   }
   try {

@@ -15,7 +15,6 @@ body {
   white-space: nowrap;
 }
 
-
 .sidebar {
   position: sticky;
   inset-block-start: 4.5rem;
@@ -53,7 +52,6 @@ body {
 .full {
   inline-size: 100%;
 }
-
 
 .main {
   flex: 1;
@@ -141,7 +139,6 @@ html:not([data-ready]) body {
   visibility: hidden;
 }
 
-
 /* Border toggle: transparent rather than removed, so the layout does not shift. */
 html[data-borders='off'] .header,
 html[data-borders='off'] .sidebar {
@@ -166,7 +163,6 @@ textarea.mono {
 .login-card {
   inline-size: min(100%, 24rem);
 }
-
 
 .picker {
   inline-size: 12rem;

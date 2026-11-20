@@ -4,8 +4,18 @@ import {boolean} from './csg.ts';
 // Regex prompt parser: the fallback when no LLM key is configured (see intent.ts).
 
 export type Kind =
-  | 'vase' | 'cup' | 'cylinder' | 'tube' | 'cone' | 'sphere'
-  | 'box' | 'plate' | 'gear' | 'hex' | 'star' | 'tag';
+  | 'vase'
+  | 'cup'
+  | 'cylinder'
+  | 'tube'
+  | 'cone'
+  | 'sphere'
+  | 'box'
+  | 'plate'
+  | 'gear'
+  | 'hex'
+  | 'star'
+  | 'tag';
 
 export interface Spec {
   kind: Kind;
@@ -23,15 +33,37 @@ export interface Spec {
   segments: number;
 }
 
-export type Model =
-  | {type: 'param'; spec: Spec}
-  | {type: 'mesh'; name: string; positions: Float32Array};
+export type Model = {type: 'param'; spec: Spec} | {type: 'mesh'; name: string; positions: Float32Array};
 
-export const kinds: Array<Kind> = ['vase', 'cup', 'cylinder', 'tube', 'cone', 'sphere', 'box', 'plate', 'gear', 'hex', 'star', 'tag'];
+export const kinds: Array<Kind> = [
+  'vase',
+  'cup',
+  'cylinder',
+  'tube',
+  'cone',
+  'sphere',
+  'box',
+  'plate',
+  'gear',
+  'hex',
+  'star',
+  'tag',
+];
 
 export const base: Spec = {
-  kind: 'box', width: 40, depth: 40, height: 40, wall: 0, hole: 0,
-  teeth: 20, points: 5, ribs: 0, twist: 0, taper: 1, corner: 0, segments: 96,
+  kind: 'box',
+  width: 40,
+  depth: 40,
+  height: 40,
+  wall: 0,
+  hole: 0,
+  teeth: 20,
+  points: 5,
+  ribs: 0,
+  twist: 0,
+  taper: 1,
+  corner: 0,
+  segments: 96,
 };
 
 export const defaults: Record<Kind, Partial<Spec>> = {
@@ -50,10 +82,14 @@ export const defaults: Record<Kind, Partial<Spec>> = {
 };
 
 const kindWords: Array<[Kind, RegExp]> = [
-  ['vase', /\bvases?\b/], ['cup', /\b(cup|mug|planter|pot|bowl)s?\b/],
-  ['tube', /\b(tube|pipe|ring|sleeve|spacer)s?\b/], ['cone', /\bcones?\b/],
-  ['sphere', /\b(sphere|ball|orb)s?\b/], ['gear', /\b(gear|cog)s?\b/],
-  ['hex', /\b(hex|hexagon(al)?)\b/], ['star', /\bstars?\b/],
+  ['vase', /\bvases?\b/],
+  ['cup', /\b(cup|mug|planter|pot|bowl)s?\b/],
+  ['tube', /\b(tube|pipe|ring|sleeve|spacer)s?\b/],
+  ['cone', /\bcones?\b/],
+  ['sphere', /\b(sphere|ball|orb)s?\b/],
+  ['gear', /\b(gear|cog)s?\b/],
+  ['hex', /\b(hex|hexagon(al)?)\b/],
+  ['star', /\bstars?\b/],
   ['tag', /\b(tag|keychain|key ?ring|label)s?\b/],
   ['plate', /\b(plate|coaster|tile|sign)s?\b/],
   ['box', /\b(box|tray|cube|block|container|organi[sz]er)s?\b/],
@@ -61,15 +97,18 @@ const kindWords: Array<[Kind, RegExp]> = [
 ];
 
 const NUM = String.raw`(\d+(?:\.\d+)?)\s*(mm|cm|in)?`;
-const toMm = (n: string, unit?: string) =>
-  Number(n) * (unit === 'cm' ? 10 : unit === 'in' ? 25.4 : 1);
+const toMm = (n: string, unit?: string) => Number(n) * (unit === 'cm' ? 10 : unit === 'in' ? 25.4 : 1);
 
 /** Finds "<number> <word>" or "<word> <number>" and returns millimetres. */
 function grab(text: string, words: string): number | undefined {
   const after = new RegExp(`${NUM}\\s*(?:${words})\\b`).exec(text);
-  if (after) {return toMm(after[1], after[2]);}
+  if (after) {
+    return toMm(after[1], after[2]);
+  }
   const before = new RegExp(`\\b(?:${words})\\s*(?:of|=|:|is)?\\s*${NUM}`).exec(text);
-  if (before) {return toMm(before[1], before[2]);}
+  if (before) {
+    return toMm(before[1], before[2]);
+  }
 }
 
 const fmt = (n: number) => String(Math.round(n * 10) / 10);
@@ -80,15 +119,33 @@ export function describe(spec: Spec): string {
     ? `Ø${fmt(spec.width)} × ${fmt(spec.height)} mm`
     : `${fmt(spec.width)} × ${fmt(spec.depth)} × ${fmt(spec.height)} mm`;
   const parts: Array<string> = [spec.kind, size];
-  if (spec.wall) {parts.push(`${fmt(spec.wall)} mm walls`);}
-  if (spec.hole) {parts.push(`Ø${fmt(spec.hole)} hole`);}
-  if (spec.kind === 'gear') {parts.push(`${spec.teeth} teeth`);}
-  if (spec.kind === 'star') {parts.push(`${spec.points} points`);}
-  if (spec.ribs) {parts.push(`${spec.ribs} ribs`);}
-  if (spec.twist) {parts.push(`${fmt(spec.twist)}° twist`);}
-  if (spec.taper !== 1) {parts.push(`taper ${fmt(spec.taper)}`);}
-  if (spec.corner) {parts.push(`${fmt(spec.corner)} mm corners`);}
-  if (spec.segments < 24) {parts.push('low poly');}
+  if (spec.wall) {
+    parts.push(`${fmt(spec.wall)} mm walls`);
+  }
+  if (spec.hole) {
+    parts.push(`Ø${fmt(spec.hole)} hole`);
+  }
+  if (spec.kind === 'gear') {
+    parts.push(`${spec.teeth} teeth`);
+  }
+  if (spec.kind === 'star') {
+    parts.push(`${spec.points} points`);
+  }
+  if (spec.ribs) {
+    parts.push(`${spec.ribs} ribs`);
+  }
+  if (spec.twist) {
+    parts.push(`${fmt(spec.twist)}° twist`);
+  }
+  if (spec.taper !== 1) {
+    parts.push(`taper ${fmt(spec.taper)}`);
+  }
+  if (spec.corner) {
+    parts.push(`${fmt(spec.corner)} mm corners`);
+  }
+  if (spec.segments < 24) {
+    parts.push('low poly');
+  }
   return parts.join(' · ');
 }
 
@@ -101,10 +158,16 @@ export function parsePrompt(prompt: string, prev?: Spec) {
   if (!prev || (kind && kind !== prev.kind)) {
     const k = kind ?? prev?.kind ?? 'box';
     s = newSpec(k);
-    if (prev) {changes.push(`turned it into a ${k}`);}
-  } else {s = {...prev};}
+    if (prev) {
+      changes.push(`turned it into a ${k}`);
+    }
+  } else {
+    s = {...prev};
+  }
   const set = <K extends keyof Spec>(key: K, value: Spec[K], note: string) => {
-    if (s[key] === value) {return;}
+    if (s[key] === value) {
+      return;
+    }
     s[key] = value;
     changes.push(note);
   };
@@ -112,52 +175,117 @@ export function parsePrompt(prompt: string, prev?: Spec) {
   // Relative edits.
   if (prev) {
     const mul = (keys: Array<'width' | 'depth' | 'height'>, f: number, note: string) => {
-      for (const k of keys) {s[k] *= f;}
+      for (const k of keys) {
+        s[k] *= f;
+      }
       changes.push(note);
     };
     const rel = /(\d+(?:\.\d+)?)\s*%\s*(bigger|larger|smaller)/.exec(t);
-    if (rel) {mul(['width', 'depth', 'height'], rel[2] === 'smaller' ? 1 - Number(rel[1]) / 100 : 1 + Number(rel[1]) / 100, `${rel[1]}% ${rel[2]}`);}
-    else if (/\b(twice|double) (as )?(big|large|the size)/.test(t)) {mul(['width', 'depth', 'height'], 2, 'doubled the size');}
-    else if (/\bhalf (the )?size\b/.test(t)) {mul(['width', 'depth', 'height'], 0.5, 'halved the size');}
-    else if (/\b(bigger|larger)\b/.test(t)) {mul(['width', 'depth', 'height'], 1.25, 'scaled up 25%');}
-    else if (/\bsmaller\b/.test(t)) {mul(['width', 'depth', 'height'], 0.8, 'scaled down 20%');}
+    if (rel) {
+      mul(
+        ['width', 'depth', 'height'],
+        rel[2] === 'smaller' ? 1 - Number(rel[1]) / 100 : 1 + Number(rel[1]) / 100,
+        `${rel[1]}% ${rel[2]}`,
+      );
+    } else if (/\b(twice|double) (as )?(big|large|the size)/.test(t)) {
+      mul(['width', 'depth', 'height'], 2, 'doubled the size');
+    } else if (/\bhalf (the )?size\b/.test(t)) {
+      mul(['width', 'depth', 'height'], 0.5, 'halved the size');
+    } else if (/\b(bigger|larger)\b/.test(t)) {
+      mul(['width', 'depth', 'height'], 1.25, 'scaled up 25%');
+    } else if (/\bsmaller\b/.test(t)) {
+      mul(['width', 'depth', 'height'], 0.8, 'scaled down 20%');
+    }
     const pct = /\bscale\D{0,6}(\d+(?:\.\d+)?)\s*%/.exec(t);
-    if (pct) {mul(['width', 'depth', 'height'], Number(pct[1]) / 100, `scaled to ${pct[1]}%`);}
-    if (/\b(taller|higher)\b/.test(t)) {mul(['height'], 1.25, 'made it 25% taller');}
-    if (/\b(shorter|lower|flatter)\b/.test(t)) {mul(['height'], 0.8, 'made it 20% shorter');}
-    if (/\b(wider|fatter)\b/.test(t)) {mul(['width', 'depth'], 1.2, 'made it 20% wider');}
-    if (/\b(narrower|slimmer|skinnier)\b/.test(t)) {mul(['width', 'depth'], 0.85, 'made it 15% narrower');}
-    if (/\b(thicker|sturdier|stronger) walls?\b|\b(sturdier|stronger)\b/.test(t))
-      {set('wall', (s.wall || 1.2) + 1, 'thickened the walls by 1 mm');}
-    if (/\bthinner walls?\b/.test(t)) {set('wall', Math.max(0.8, s.wall - 0.5), 'thinned the walls');}
-    if (/\bmore teeth\b/.test(t)) {set('teeth', s.teeth + 4, 'added 4 teeth');}
-    if (/\bfewer teeth\b/.test(t)) {set('teeth', Math.max(6, s.teeth - 4), 'removed 4 teeth');}
-    if (/\bmore points\b/.test(t)) {set('points', s.points + 1, 'added a point');}
-    if (/\bfewer points\b/.test(t)) {set('points', Math.max(3, s.points - 1), 'removed a point');}
-    if (/\bmore ribs\b/.test(t)) {set('ribs', s.ribs + 4, 'added 4 ribs');}
-    if (/\b(more twist|twist (it )?more|twistier)\b/.test(t)) {set('twist', s.twist + 45, 'twisted 45° more');}
-    if (/\b(no|remove( the)?|less) twist|\bstraight(en)?\b|\buntwist/.test(t)) {set('twist', 0, 'removed the twist');}
-    if (/\b(no|remove( the)?) ribs?\b|\bsmooth sides\b/.test(t)) {set('ribs', 0, 'removed the ribs');}
-    if (/\b(no|remove( the)?|without( a)?) hole\b/.test(t)) {set('hole', 0, 'removed the hole');}
-    if (/\bsharp(er)? corners\b/.test(t)) {set('corner', 0, 'sharpened the corners');}
-    else if (/\b(round(er|ed)?|soft(er)?) corners\b|\brounder\b/.test(t)) {set('corner', s.corner + 3, 'rounded the corners');}
+    if (pct) {
+      mul(['width', 'depth', 'height'], Number(pct[1]) / 100, `scaled to ${pct[1]}%`);
+    }
+    if (/\b(taller|higher)\b/.test(t)) {
+      mul(['height'], 1.25, 'made it 25% taller');
+    }
+    if (/\b(shorter|lower|flatter)\b/.test(t)) {
+      mul(['height'], 0.8, 'made it 20% shorter');
+    }
+    if (/\b(wider|fatter)\b/.test(t)) {
+      mul(['width', 'depth'], 1.2, 'made it 20% wider');
+    }
+    if (/\b(narrower|slimmer|skinnier)\b/.test(t)) {
+      mul(['width', 'depth'], 0.85, 'made it 15% narrower');
+    }
+    if (/\b(thicker|sturdier|stronger) walls?\b|\b(sturdier|stronger)\b/.test(t)) {
+      set('wall', (s.wall || 1.2) + 1, 'thickened the walls by 1 mm');
+    }
+    if (/\bthinner walls?\b/.test(t)) {
+      set('wall', Math.max(0.8, s.wall - 0.5), 'thinned the walls');
+    }
+    if (/\bmore teeth\b/.test(t)) {
+      set('teeth', s.teeth + 4, 'added 4 teeth');
+    }
+    if (/\bfewer teeth\b/.test(t)) {
+      set('teeth', Math.max(6, s.teeth - 4), 'removed 4 teeth');
+    }
+    if (/\bmore points\b/.test(t)) {
+      set('points', s.points + 1, 'added a point');
+    }
+    if (/\bfewer points\b/.test(t)) {
+      set('points', Math.max(3, s.points - 1), 'removed a point');
+    }
+    if (/\bmore ribs\b/.test(t)) {
+      set('ribs', s.ribs + 4, 'added 4 ribs');
+    }
+    if (/\b(more twist|twist (it )?more|twistier)\b/.test(t)) {
+      set('twist', s.twist + 45, 'twisted 45° more');
+    }
+    if (/\b(no|remove( the)?|less) twist|\bstraight(en)?\b|\buntwist/.test(t)) {
+      set('twist', 0, 'removed the twist');
+    }
+    if (/\b(no|remove( the)?) ribs?\b|\bsmooth sides\b/.test(t)) {
+      set('ribs', 0, 'removed the ribs');
+    }
+    if (/\b(no|remove( the)?|without( a)?) hole\b/.test(t)) {
+      set('hole', 0, 'removed the hole');
+    }
+    if (/\bsharp(er)? corners\b/.test(t)) {
+      set('corner', 0, 'sharpened the corners');
+    } else if (/\b(round(er|ed)?|soft(er)?) corners\b|\brounder\b/.test(t)) {
+      set('corner', s.corner + 3, 'rounded the corners');
+    }
   }
-  if (/\b(smoother|high[- ]?(res|poly|detail))\b/.test(t)) {set('segments', 192, 'raised the resolution');}
-  if (/\blow[- ]?poly\b|\bfaceted\b/.test(t)) {set('segments', round.has(s.kind) ? 8 : s.segments, 'made it low poly');}
-  if (/\bsolid\b/.test(t)) {set('wall', 0, 'made it solid');}
-  else if (/\b(hollow|open top|open)\b/.test(t) && !s.wall) {set('wall', 2, 'hollowed it with 2 mm walls');}
-  if (/\btaper(ed)?\b/.test(t) && s.taper >= 1) {set('taper', 0.7, 'tapered the top');}
-  if (/\bflared?\b/.test(t)) {set('taper', 1.3, 'flared the top');}
-  if (/\btwist(ed)?\b/.test(t) && !s.twist && !/\bno twist|untwist/.test(t)) {set('twist', 90, 'added a 90° twist');}
-  if (/\b(ribbed|fluted)\b/.test(t) && !s.ribs) {set('ribs', 12, 'added 12 ribs');}
-  if (/\b(add|with|plus|and)( a| an)? hole\b|\bhole in\b/.test(t) && !s.hole) {set('hole', 4, 'added a Ø4 hole');}
+  if (/\b(smoother|high[- ]?(res|poly|detail))\b/.test(t)) {
+    set('segments', 192, 'raised the resolution');
+  }
+  if (/\blow[- ]?poly\b|\bfaceted\b/.test(t)) {
+    set('segments', round.has(s.kind) ? 8 : s.segments, 'made it low poly');
+  }
+  if (/\bsolid\b/.test(t)) {
+    set('wall', 0, 'made it solid');
+  } else if (/\b(hollow|open top|open)\b/.test(t) && !s.wall) {
+    set('wall', 2, 'hollowed it with 2 mm walls');
+  }
+  if (/\btaper(ed)?\b/.test(t) && s.taper >= 1) {
+    set('taper', 0.7, 'tapered the top');
+  }
+  if (/\bflared?\b/.test(t)) {
+    set('taper', 1.3, 'flared the top');
+  }
+  if (/\btwist(ed)?\b/.test(t) && !s.twist && !/\bno twist|untwist/.test(t)) {
+    set('twist', 90, 'added a 90° twist');
+  }
+  if (/\b(ribbed|fluted)\b/.test(t) && !s.ribs) {
+    set('ribs', 12, 'added 12 ribs');
+  }
+  if (/\b(add|with|plus|and)( a| an)? hole\b|\bhole in\b/.test(t) && !s.hole) {
+    set('hole', 4, 'added a Ø4 hole');
+  }
 
   // Absolute numbers.
   const dims = /(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)(?:\s*x\s*(\d+(?:\.\d+)?))?\s*(mm|cm)?/.exec(t);
   if (dims) {
     set('width', toMm(dims[1], dims[4]), `width ${dims[1]}`);
     set('depth', toMm(dims[2], dims[4]), `depth ${dims[2]}`);
-    if (dims[3]) {set('height', toMm(dims[3], dims[4]), `height ${dims[3]}`);}
+    if (dims[3]) {
+      set('height', toMm(dims[3], dims[4]), `height ${dims[3]}`);
+    }
   }
   const cube = /(\d+(?:\.\d+)?)\s*(mm|cm)?\s*cube/.exec(t);
   if (cube) {
@@ -166,43 +294,72 @@ export function parsePrompt(prompt: string, prev?: Spec) {
     changes.push(`${fmt(v)} mm cube`);
   }
   const height = grab(t, 'tall|high|in height|height');
-  if (height) {set('height', height, `height ${fmt(height)} mm`);}
+  if (height) {
+    set('height', height, `height ${fmt(height)} mm`);
+  }
   const thick = grab(t, 'thick|thickness');
-  if (thick && !/walls?/.test(t)) {set('height', thick, `thickness ${fmt(thick)} mm`);}
+  if (thick && !/walls?/.test(t)) {
+    set('height', thick, `thickness ${fmt(thick)} mm`);
+  }
   const radius = grab(t, 'radius');
   const width = radius ? radius * 2 : grab(t, 'wide|width|diameter|across|dia|long|length|size');
   if (width) {
     set('width', width, `width ${fmt(width)} mm`);
-    if (round.has(s.kind) || s.kind === 'hex') {s.depth = width;}
+    if (round.has(s.kind) || s.kind === 'hex') {
+      s.depth = width;
+    }
   }
   const depth = grab(t, 'deep|depth');
-  if (depth) {set('depth', depth, `depth ${fmt(depth)} mm`);}
+  if (depth) {
+    set('depth', depth, `depth ${fmt(depth)} mm`);
+  }
   const wall = grab(t, 'walls?|wall thickness|thick walls?');
-  if (wall) {set('wall', wall, `${fmt(wall)} mm walls`);}
+  if (wall) {
+    set('wall', wall, `${fmt(wall)} mm walls`);
+  }
   const hole = grab(t, 'hole|bore|shaft');
-  if (hole) {set('hole', hole, `Ø${fmt(hole)} hole`);}
+  if (hole) {
+    set('hole', hole, `Ø${fmt(hole)} hole`);
+  }
   const teeth = /(\d+)\s*teeth/.exec(t);
-  if (teeth) {set('teeth', Math.max(6, Number(teeth[1])), `${teeth[1]} teeth`);}
+  if (teeth) {
+    set('teeth', Math.max(6, Number(teeth[1])), `${teeth[1]} teeth`);
+  }
   const points = /(\d+)[\s-]*points?/.exec(t);
-  if (points) {set('points', Math.max(3, Number(points[1])), `${points[1]} points`);}
+  if (points) {
+    set('points', Math.max(3, Number(points[1])), `${points[1]} points`);
+  }
   const ribs = /(\d+)\s*(ribs|flutes)/.exec(t);
-  if (ribs) {set('ribs', Number(ribs[1]), `${ribs[1]} ribs`);}
+  if (ribs) {
+    set('ribs', Number(ribs[1]), `${ribs[1]} ribs`);
+  }
   const twist = /(\d+)\s*(°|deg|degrees?)?\s*twist|twist(?:ed)?\s*(?:by\s*)?(\d+)/.exec(t);
-  if (twist) {set('twist', Number(twist[1] ?? twist[3]), `${twist[1] ?? twist[3]}° twist`);}
+  if (twist) {
+    set('twist', Number(twist[1] ?? twist[3]), `${twist[1] ?? twist[3]}° twist`);
+  }
   const corner = grab(t, 'corners?|fillets?|corner radius');
-  if (corner) {set('corner', corner, `${fmt(corner)} mm corners`);}
+  if (corner) {
+    set('corner', corner, `${fmt(corner)} mm corners`);
+  }
 
   normalize(s);
-  if (!prev) {changes.unshift(describe(s));}
+  if (!prev) {
+    changes.unshift(describe(s));
+  }
   return {spec: s, changes};
 }
 
-export const newSpec = (kind: Kind, over: Partial<Spec> = {}): Spec => normalize({...base, ...defaults[kind], ...over, kind});
+export const newSpec = (kind: Kind, over: Partial<Spec> = {}): Spec =>
+  normalize({...base, ...defaults[kind], ...over, kind});
 
 /** Enforces the shape rules every spec must satisfy, in place. */
 export function normalize(s: Spec): Spec {
-  if (round.has(s.kind)) {s.depth = s.width;}
-  if (s.kind === 'sphere') {s.height = s.width;}
+  if (round.has(s.kind)) {
+    s.depth = s.width;
+  }
+  if (s.kind === 'sphere') {
+    s.height = s.width;
+  }
   s.wall = Math.max(0, Math.min(s.wall, Math.min(s.width, s.depth) / 2 - 1));
   s.hole = Math.min(s.hole, Math.min(s.width, s.depth) * 0.8);
   return s;
@@ -219,10 +376,13 @@ export type NumField = Exclude<keyof Spec, 'kind'>;
 export const numFields = Object.keys(base).filter((k) => k !== 'kind') as Array<NumField>;
 
 export const describeOp = (o: Op) =>
-  o.op === 'set' ? `set ${o.field} ${fmt(o.value)}`
-  : o.op === 'scale' ? `scale ${[o.x, o.y, o.z].map(fmt).join(' × ')}`
-  : o.op === 'rotate' ? `rotate ${fmt(o.degrees)}° about ${o.axis.toUpperCase()}`
-  : `${o.op} ${describe(o.part)} at ${o.at.map(fmt).join(', ')}`;
+  o.op === 'set'
+    ? `set ${o.field} ${fmt(o.value)}`
+    : o.op === 'scale'
+      ? `scale ${[o.x, o.y, o.z].map(fmt).join(' × ')}`
+      : o.op === 'rotate'
+        ? `rotate ${fmt(o.degrees)}° about ${o.axis.toUpperCase()}`
+        : `${o.op} ${describe(o.part)} at ${o.at.map(fmt).join(', ')}`;
 
 /** Applies ops to a model. Returns the new model and one note per op. A boolean turns a parametric model into a mesh. */
 export function applyOps(m: Model, ops: Array<Op>) {
@@ -230,7 +390,11 @@ export function applyOps(m: Model, ops: Array<Op>) {
   for (const o of ops) {
     if ('part' in o) {
       const tool = buildPositions(o.part);
-      for (let i = 0; i < tool.length; i += 3) {for (let k = 0; k < 3; k++) {tool[i + k] += o.at[k];}}
+      for (let i = 0; i < tool.length; i += 3) {
+        for (let k = 0; k < 3; k++) {
+          tool[i + k] += o.at[k];
+        }
+      }
       try {
         const p = boolean(m.type === 'param' ? buildPositions(m.spec) : m.positions, tool, o.op);
         m = {type: 'mesh', name: m.type === 'mesh' ? m.name : m.spec.kind, positions: finalize(Array.from(p))};
@@ -240,13 +404,23 @@ export function applyOps(m: Model, ops: Array<Op>) {
       }
     } else if (m.type === 'param') {
       const s = {...m.spec};
-      if (o.op === 'set') {s[o.field] = o.value;}
-      else if (o.op === 'scale') {s.width *= o.x; s.depth *= o.y; s.height *= o.z;}
-      else { changes.push(`skipped ${describeOp(o)}: rotation applies to imported meshes`); continue; }
+      if (o.op === 'set') {
+        s[o.field] = o.value;
+      } else if (o.op === 'scale') {
+        s.width *= o.x;
+        s.depth *= o.y;
+        s.height *= o.z;
+      } else {
+        changes.push(`skipped ${describeOp(o)}: rotation applies to imported meshes`);
+        continue;
+      }
       m = {type: 'param', spec: normalize(s)};
       changes.push(describeOp(o));
     } else {
-      if (o.op === 'set') { changes.push(`skipped ${describeOp(o)}: imported meshes have no ${o.field}`); continue; }
+      if (o.op === 'set') {
+        changes.push(`skipped ${describeOp(o)}: imported meshes have no ${o.field}`);
+        continue;
+      }
       m = {...m, positions: finalize(Array.from(transform(m.positions, o)))};
       changes.push(describeOp(o));
     }
@@ -256,8 +430,13 @@ export function applyOps(m: Model, ops: Array<Op>) {
 
 function transform(src: Float32Array, o: Extract<Op, {op: 'scale' | 'rotate'}>): Float32Array {
   const p = new Float32Array(src);
-  if (o.op === 'scale') {for (let i = 0; i < p.length; i += 3) {p[i] *= o.x; p[i + 1] *= o.y; p[i + 2] *= o.z;}}
-  else {
+  if (o.op === 'scale') {
+    for (let i = 0; i < p.length; i += 3) {
+      p[i] *= o.x;
+      p[i + 1] *= o.y;
+      p[i + 2] *= o.z;
+    }
+  } else {
     const a = (o.degrees * Math.PI) / 180;
     const [c, sn] = [Math.cos(a), Math.sin(a)];
     const [u, v] = o.axis === 'x' ? [1, 2] : o.axis === 'y' ? [2, 0] : [0, 1];
@@ -279,17 +458,43 @@ export function editMesh(prompt: string, positions: Float32Array) {
   if (pct) {
     sx = sy = sz = Number(pct[1]) / 100;
     changes.push(`scaled to ${pct[1]}%`);
-  } else if (/\b(twice|double)\b/.test(t)) {sx = sy = sz = 2; changes.push('doubled the size');}
-  else if (/\bhalf\b/.test(t)) {sx = sy = sz = 0.5; changes.push('halved the size');}
-  else if (/\b(bigger|larger)\b/.test(t)) {sx = sy = sz = 1.25; changes.push('scaled up 25%');}
-  else if (/\bsmaller\b/.test(t)) {sx = sy = sz = 0.8; changes.push('scaled down 20%');}
-  if (/\b(taller|higher)\b/.test(t)) {sz *= 1.25; changes.push('made it 25% taller');}
-  if (/\b(shorter|lower|flatter)\b/.test(t)) {sz *= 0.8; changes.push('made it 20% shorter');}
-  if (/\bwider\b/.test(t)) {sx *= 1.2; sy *= 1.2; changes.push('made it 20% wider');}
+  } else if (/\b(twice|double)\b/.test(t)) {
+    sx = sy = sz = 2;
+    changes.push('doubled the size');
+  } else if (/\bhalf\b/.test(t)) {
+    sx = sy = sz = 0.5;
+    changes.push('halved the size');
+  } else if (/\b(bigger|larger)\b/.test(t)) {
+    sx = sy = sz = 1.25;
+    changes.push('scaled up 25%');
+  } else if (/\bsmaller\b/.test(t)) {
+    sx = sy = sz = 0.8;
+    changes.push('scaled down 20%');
+  }
+  if (/\b(taller|higher)\b/.test(t)) {
+    sz *= 1.25;
+    changes.push('made it 25% taller');
+  }
+  if (/\b(shorter|lower|flatter)\b/.test(t)) {
+    sz *= 0.8;
+    changes.push('made it 20% shorter');
+  }
+  if (/\bwider\b/.test(t)) {
+    sx *= 1.2;
+    sy *= 1.2;
+    changes.push('made it 20% wider');
+  }
   const out = new Float32Array(positions);
-  for (let i = 0; i < out.length; i += 3) {out[i] *= sx; out[i + 1] *= sy; out[i + 2] *= sz;}
+  for (let i = 0; i < out.length; i += 3) {
+    out[i] *= sx;
+    out[i + 1] *= sy;
+    out[i + 2] *= sz;
+  }
   if (/\b(flip|upside down)\b/.test(t)) {
-    for (let i = 0; i < out.length; i += 3) {out[i + 1] = -out[i + 1]; out[i + 2] = -out[i + 2];}
+    for (let i = 0; i < out.length; i += 3) {
+      out[i + 1] = -out[i + 1];
+      out[i + 2] = -out[i + 2];
+    }
     changes.push('flipped it upside down');
   }
   if (/\b(rotate|stand( it)? up|lay( it)? (flat|down))\b/.test(t)) {
@@ -304,8 +509,12 @@ export function editMesh(prompt: string, positions: Float32Array) {
   if (/\b(hole|drill|bore)\b/.test(t)) {
     const d = grab(t, 'hole|bore') ?? 4;
     const h = bounds(result)[1][2] + 2;
-    const r = applyOps({type: 'mesh', name: '', positions: result}, [{op: 'subtract', part: newSpec('cylinder', {width: d, height: h}), at: [0, 0, -1]}]);
-    if (r.model.type === 'mesh') {result = r.model.positions;}
+    const r = applyOps({type: 'mesh', name: '', positions: result}, [
+      {op: 'subtract', part: newSpec('cylinder', {width: d, height: h}), at: [0, 0, -1]},
+    ]);
+    if (r.model.type === 'mesh') {
+      result = r.model.positions;
+    }
     changes.push(...r.changes);
   }
   return {positions: result, changes};
@@ -326,7 +535,9 @@ function revolve(profile: Array<P2>, segs: number, radial: (phi: number, z: numb
   for (let i = 0; i < profile.length; i++) {
     const a = profile[i];
     const b = profile[(i + 1) % profile.length];
-    if (a[0] === 0 && b[0] === 0) {continue;}
+    if (a[0] === 0 && b[0] === 0) {
+      continue;
+    }
     for (let j = 0; j < segs; j++) {
       const p0 = (j / segs) * Math.PI * 2;
       const p1 = ((j + 1) / segs) * Math.PI * 2;
@@ -341,13 +552,21 @@ function roundedRect<T extends Shape | Path = Shape>(w: number, d: number, c: nu
   const [x, y] = [-w / 2, -d / 2];
   path.moveTo(x + c, y);
   path.lineTo(x + w - c, y);
-  if (c) {path.quadraticCurveTo(x + w, y, x + w, y + c);}
+  if (c) {
+    path.quadraticCurveTo(x + w, y, x + w, y + c);
+  }
   path.lineTo(x + w, y + d - c);
-  if (c) {path.quadraticCurveTo(x + w, y + d, x + w - c, y + d);}
+  if (c) {
+    path.quadraticCurveTo(x + w, y + d, x + w - c, y + d);
+  }
   path.lineTo(x + c, y + d);
-  if (c) {path.quadraticCurveTo(x, y + d, x, y + d - c);}
+  if (c) {
+    path.quadraticCurveTo(x, y + d, x, y + d - c);
+  }
   path.lineTo(x, y + c);
-  if (c) {path.quadraticCurveTo(x, y, x + c, y);}
+  if (c) {
+    path.quadraticCurveTo(x, y, x + c, y);
+  }
   return path;
 }
 
@@ -372,8 +591,14 @@ function outline(s: Spec): Shape {
     for (let i = 0; i < s.teeth; i++) {
       const a = (i / s.teeth) * Math.PI * 2;
       const st = (Math.PI * 2) / s.teeth;
-      for (const [r, f] of [[root, 0], [R, 0.3], [R, 0.5], [root, 0.8]] as Array<P2>)
-        {pts.push([r * Math.cos(a + f * st), r * Math.sin(a + f * st)]);}
+      for (const [r, f] of [
+        [root, 0],
+        [R, 0.3],
+        [R, 0.5],
+        [root, 0.8],
+      ] as Array<P2>) {
+        pts.push([r * Math.cos(a + f * st), r * Math.sin(a + f * st)]);
+      }
     }
     return polygon(pts);
   }
@@ -387,7 +612,9 @@ function outline(s: Spec): Shape {
     return polygon(pts);
   }
   if (s.kind === 'hex') {
-    return polygon(Array.from({length: 6}, (_, i) => [R * Math.cos((i * Math.PI) / 3), R * Math.sin((i * Math.PI) / 3)] as P2));
+    return polygon(
+      Array.from({length: 6}, (_, i) => [R * Math.cos((i * Math.PI) / 3), R * Math.sin((i * Math.PI) / 3)] as P2),
+    );
   }
   return roundedRect(s.width, s.depth, s.corner);
 }
@@ -417,8 +644,12 @@ export function buildPositions(s: Spec): Float32Array {
     const curved = s.kind === 'vase' || s.kind === 'sphere' || s.ribs > 0 || s.twist !== 0;
     const n = curved ? 64 : 1;
     const r = (t: number) => {
-      if (s.kind === 'sphere') {return R * Math.sin(Math.PI * t);}
-      if (s.kind === 'cone') {return Math.max(R * (1 - t), 0.01);}
+      if (s.kind === 'sphere') {
+        return R * Math.sin(Math.PI * t);
+      }
+      if (s.kind === 'cone') {
+        return Math.max(R * (1 - t), 0.01);
+      }
       const k = lerp(1, s.taper, t);
       return s.kind === 'vase' ? R * k * (0.62 + 0.38 * Math.sin(Math.PI * (0.15 + 0.85 * t))) : R * k;
     };
@@ -427,10 +658,19 @@ export function buildPositions(s: Spec): Float32Array {
     let profile: Array<P2>;
     const wall = s.kind === 'sphere' || s.kind === 'cone' ? 0 : s.wall;
     if (wall > 0 && s.kind === 'tube') {
-      profile = [...outer, ...ts.slice().reverse().map((t) => [Math.max(r(t) - wall, 0.5), t * h] as P2)];
+      profile = [
+        ...outer,
+        ...ts
+          .slice()
+          .reverse()
+          .map((t) => [Math.max(r(t) - wall, 0.5), t * h] as P2),
+      ];
     } else if (wall > 0) {
       const floor = Math.min(Math.max(wall, 1.2), h / 2);
-      const inner = ts.filter((t) => t * h > floor).reverse().map((t) => [Math.max(r(t) - wall, 0.5), t * h] as P2);
+      const inner = ts
+        .filter((t) => t * h > floor)
+        .reverse()
+        .map((t) => [Math.max(r(t) - wall, 0.5), t * h] as P2);
       profile = [[0, 0], ...outer, ...inner, [Math.max(r(floor / h) - wall, 0.5), floor], [0, floor]];
     } else {
       profile = [[0, 0], ...outer, [0, h]];
@@ -441,11 +681,17 @@ export function buildPositions(s: Spec): Float32Array {
     return finalize(revolve(profile, segs, ribs));
   }
   const shape = outline(s);
-  if (s.hole) {shape.holes.push(s.kind === 'tag' ? circle(-s.width / 2 + Math.max(5, s.hole), 0, s.hole / 2) : circle(0, 0, s.hole / 2));}
+  if (s.hole) {
+    shape.holes.push(
+      s.kind === 'tag' ? circle(-s.width / 2 + Math.max(5, s.hole), 0, s.hole / 2) : circle(0, 0, s.hole / 2),
+    );
+  }
   if (s.kind === 'box' && s.wall > 0) {
     const floor = Math.min(Math.max(s.wall, 1.2), h / 2);
     const ring = outline(s);
-    ring.holes.push(roundedRect(s.width - 2 * s.wall, s.depth - 2 * s.wall, Math.max(0, s.corner - s.wall), new Path()));
+    ring.holes.push(
+      roundedRect(s.width - 2 * s.wall, s.depth - 2 * s.wall, Math.max(0, s.corner - s.wall), new Path()),
+    );
     return finalize([...extrude(shape, floor, 0, s), ...extrude(ring, h - floor, floor, s)]);
   }
   return finalize(extrude(shape, h, 0, s));
@@ -456,10 +702,17 @@ export function finalize(arr: Array<number>): Float32Array {
   const out = new Float32Array(arr);
   const [min, max] = bounds(out);
   const [cx, cy] = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2];
-  for (let i = 0; i < out.length; i += 3) {out[i] -= cx; out[i + 1] -= cy; out[i + 2] -= min[2];}
+  for (let i = 0; i < out.length; i += 3) {
+    out[i] -= cx;
+    out[i + 1] -= cy;
+    out[i + 2] -= min[2];
+  }
   if (volume(out) < 0) {
-    for (let i = 0; i < out.length; i += 9)
-      {for (let k = 0; k < 3; k++) {[out[i + 3 + k], out[i + 6 + k]] = [out[i + 6 + k], out[i + 3 + k]];}}
+    for (let i = 0; i < out.length; i += 9) {
+      for (let k = 0; k < 3; k++) {
+        [out[i + 3 + k], out[i + 6 + k]] = [out[i + 6 + k], out[i + 3 + k]];
+      }
+    }
   }
   return out;
 }
@@ -467,11 +720,12 @@ export function finalize(arr: Array<number>): Float32Array {
 export function bounds(p: Float32Array): [Array<number>, Array<number>] {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
-  for (let i = 0; i < p.length; i += 3)
-    {for (let k = 0; k < 3; k++) {
+  for (let i = 0; i < p.length; i += 3) {
+    for (let k = 0; k < 3; k++) {
       min[k] = Math.min(min[k], p[i + k]);
       max[k] = Math.max(max[k], p[i + k]);
-    }}
+    }
+  }
   return [min, max];
 }
 
@@ -498,7 +752,9 @@ export function toStl(p: Float32Array): ArrayBuffer {
     const nrm = [uy * wz - uz * wy, uz * wx - ux * wz, ux * wy - uy * wx];
     const len = Math.hypot(...nrm) || 1;
     nrm.forEach((c, k) => dv.setFloat32(o + k * 4, c / len, true));
-    for (let k = 0; k < 9; k++) {dv.setFloat32(o + 12 + k * 4, v[k], true);}
+    for (let k = 0; k < 9; k++) {
+      dv.setFloat32(o + 12 + k * 4, v[k], true);
+    }
   }
   return buf;
 }

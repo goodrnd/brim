@@ -9,19 +9,19 @@ export type Intent = {type: 'spec'; spec: Spec} | {type: 'ops'; ops: Array<Op>};
 
 const n = (description: string) => opt(num({description}));
 const shape = {
-      kind: oneOf(kinds),
-      width: n('mm; diameter for round kinds (vase, cup, cylinder, tube, cone, sphere, gear, hex, star)'),
-      depth: n('mm; box, plate and tag only'),
-      height: n('mm; "thick" means height for flat parts'),
-      wall: n('mm wall thickness; 0 = solid'),
-      hole: n('mm through-hole diameter; 0 = none'),
-      teeth: n('gear teeth'),
-      points: n('star points'),
-      ribs: n('vertical ribs'),
-      twist: n('degrees over full height'),
-      taper: n('top scale; 1 = straight, <1 narrower top, >1 flared'),
-      corner: n('mm corner radius'),
-      segments: n('round resolution; 96 default, 192 smooth, 8 low poly'),
+  kind: oneOf(kinds),
+  width: n('mm; diameter for round kinds (vase, cup, cylinder, tube, cone, sphere, gear, hex, star)'),
+  depth: n('mm; box, plate and tag only'),
+  height: n('mm; "thick" means height for flat parts'),
+  wall: n('mm wall thickness; 0 = solid'),
+  hole: n('mm through-hole diameter; 0 = none'),
+  teeth: n('gear teeth'),
+  points: n('star points'),
+  ribs: n('vertical ribs'),
+  twist: n('degrees over full height'),
+  taper: n('top scale; 1 = straight, <1 narrower top, >1 flared'),
+  corner: n('mm corner radius'),
+  segments: n('round resolution; 96 default, 192 smooth, 8 low poly'),
 };
 const opSchema = obj({
   op: oneOf(['set', 'scale', 'rotate', 'add', 'subtract'] as const),
@@ -33,14 +33,21 @@ const opSchema = obj({
   axis: opt(oneOf(['x', 'y', 'z'] as const)),
   degrees: n('rotate: angle'),
   part: opt(obj(shape, {description: 'add/subtract: the shape to join or cut away'})),
-  at: opt(arr(num(), {minItems: 3, maxItems: 3, description: 'add/subtract: [x, y, z] mm from the model\'s bottom centre to the part\'s bottom centre'})),
+  at: opt(
+    arr(num(), {
+      minItems: 3,
+      maxItems: 3,
+      description: "add/subtract: [x, y, z] mm from the model's bottom centre to the part's bottom centre",
+    }),
+  ),
 });
 type ShapeArgs = Static<ReturnType<typeof obj<typeof shape>>>;
 type OpArgs = Static<typeof opSchema>;
 export const tools: Array<Tool> = [
   {
     name: 'new_shape',
-    description: 'Create a new parametric shape, or replace the current one with a different kind. Omitted fields use defaults.',
+    description:
+      'Create a new parametric shape, or replace the current one with a different kind. Omitted fields use defaults.',
     parameters: obj(shape),
   },
   {
@@ -72,14 +79,22 @@ add joins a part, subtract cuts it away (holes: a cylinder taller than the model
 
 export function buildContext(prompt: string, current?: Current): Context {
   const state = current ? `Current model: ${JSON.stringify(current)}` : 'No current model.';
-  return {systemPrompt, tools, messages: [{role: 'user', content: `${state}\nRequest: ${prompt}`, timestamp: Date.now()}]};
+  return {
+    systemPrompt,
+    tools,
+    messages: [{role: 'user', content: `${state}\nRequest: ${prompt}`, timestamp: Date.now()}],
+  };
 }
 
 /** Validates the model's tool call and turns it into an Intent. Throws with a reason when it does not check out. */
 export function readIntent(msg: Pick<AssistantMessage, 'stopReason' | 'errorMessage' | 'content'>): Intent {
-  if (msg.stopReason === 'error' || msg.stopReason === 'aborted') {throw new Error(msg.errorMessage ?? msg.stopReason);}
+  if (msg.stopReason === 'error' || msg.stopReason === 'aborted') {
+    throw new Error(msg.errorMessage ?? msg.stopReason);
+  }
   const call = msg.content.find((b) => b.type === 'toolCall');
-  if (!call) {throw new Error('model did not call a tool');}
+  if (!call) {
+    throw new Error('model did not call a tool');
+  }
   const args = validateToolCall(tools, call);
   if (call.name === 'new_shape') {
     return {type: 'spec', spec: toSpec(args)};
@@ -89,28 +104,42 @@ export function readIntent(msg: Pick<AssistantMessage, 'stopReason' | 'errorMess
 
 function toSpec(args: ShapeArgs): Spec {
   const {kind, ...rest} = args;
-  for (const [k, v] of Object.entries(rest)) {if (!(v! >= 0)) {throw new Error(`${k} must be ≥ 0`);}}
+  for (const [k, v] of Object.entries(rest)) {
+    if (!(v! >= 0)) {
+      throw new Error(`${k} must be ≥ 0`);
+    }
+  }
   return newSpec(kind, rest);
 }
 
 function toOp(o: OpArgs): Op {
   const need = <K extends keyof OpArgs>(...keys: Array<K>) => {
-    for (const k of keys) {if (o[k] === undefined) {throw new Error(`${o.op} needs ${k}`);}}
+    for (const k of keys) {
+      if (o[k] === undefined) {
+        throw new Error(`${o.op} needs ${k}`);
+      }
+    }
     return o as OpArgs & Required<Pick<OpArgs, K>>;
   };
   if (o.op === 'set') {
     const {field, value} = need('field', 'value');
-    if (!(value >= 0)) {throw new Error(`${field} must be ≥ 0`);}
+    if (!(value >= 0)) {
+      throw new Error(`${field} must be ≥ 0`);
+    }
     return {op: 'set', field, value};
   }
   if (o.op === 'scale') {
     const [x, y, z] = [o.x ?? 1, o.y ?? 1, o.z ?? 1];
-    if (![x, y, z].every((f) => f > 0 && f <= 100)) {throw new Error('scale factors must be in (0, 100]');}
+    if (![x, y, z].every((f) => f > 0 && f <= 100)) {
+      throw new Error('scale factors must be in (0, 100]');
+    }
     return {op: 'scale', x, y, z};
   }
   if (o.op === 'add' || o.op === 'subtract') {
     const {part, at} = need('part', 'at');
-    if (!at.every((v) => Math.abs(v) <= 1000)) {throw new Error('at must be within 1 m');}
+    if (!at.every((v) => Math.abs(v) <= 1000)) {
+      throw new Error('at must be within 1 m');
+    }
     return {op: o.op, part: toSpec(part), at: at as [number, number, number]};
   }
   const {axis, degrees} = need('axis', 'degrees');

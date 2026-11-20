@@ -1,12 +1,45 @@
 import {useEffect, useRef} from 'react';
-import {BufferAttribute, BufferGeometry, Color, DirectionalLight, Float32BufferAttribute, Group, HemisphereLight, LineBasicMaterial, LineSegments, Mesh, MeshStandardMaterial, Object3D, PerspectiveCamera, Scene, WebGLRenderer} from 'three';
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  DirectionalLight,
+  Float32BufferAttribute,
+  Group,
+  HemisphereLight,
+  LineBasicMaterial,
+  LineSegments,
+  Mesh,
+  MeshStandardMaterial,
+  Object3D,
+  PerspectiveCamera,
+  Scene,
+  WebGLRenderer,
+} from 'three';
 import {tokenColor} from './color.ts';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
 
 /** Orbitable preview of a triangle soup on a printer bed. Colours come from the design tokens. */
-export function Viewer({positions, bed, theme, onSnapshot}: {positions: Float32Array; bed: [number, number]; theme: string; onSnapshot?: (url: string) => void}) {
+export function Viewer({
+  positions,
+  bed,
+  theme,
+  onSnapshot,
+}: {
+  positions: Float32Array;
+  bed: [number, number];
+  theme: string;
+  onSnapshot?: (url: string) => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
-  const state = useRef<{scene: Scene; mesh?: Mesh; grid?: Object3D; camera: PerspectiveCamera; controls: OrbitControls; snap?: boolean}>(null);
+  const state = useRef<{
+    scene: Scene;
+    mesh?: Mesh;
+    grid?: Object3D;
+    camera: PerspectiveCamera;
+    controls: OrbitControls;
+    snap?: boolean;
+  }>(null);
   const snapshot = useRef(onSnapshot);
   useEffect(() => {
     snapshot.current = onSnapshot;
@@ -63,7 +96,9 @@ export function Viewer({positions, bed, theme, onSnapshot}: {positions: Float32A
       s.scene.remove(s.mesh);
       s.mesh.geometry.dispose();
     }
-    if (s.grid) {s.scene.remove(s.grid);}
+    if (s.grid) {
+      s.scene.remove(s.grid);
+    }
     const geo = new BufferGeometry();
     geo.setAttribute('position', new BufferAttribute(positions, 3));
     geo.computeVertexNormals();
@@ -74,8 +109,12 @@ export function Viewer({positions, bed, theme, onSnapshot}: {positions: Float32A
     const grid = new Group();
     const line = token('--semantic-color-border-secondary', '#ccc');
     const lines: Array<number> = [];
-    for (let x = -bedX / 2; x <= bedX / 2; x += 10) {lines.push(x, -bedY / 2, 0, x, bedY / 2, 0);}
-    for (let y = -bedY / 2; y <= bedY / 2; y += 10) {lines.push(-bedX / 2, y, 0, bedX / 2, y, 0);}
+    for (let x = -bedX / 2; x <= bedX / 2; x += 10) {
+      lines.push(x, -bedY / 2, 0, x, bedY / 2, 0);
+    }
+    for (let y = -bedY / 2; y <= bedY / 2; y += 10) {
+      lines.push(-bedX / 2, y, 0, bedX / 2, y, 0);
+    }
     const lg = new BufferGeometry();
     lg.setAttribute('position', new Float32BufferAttribute(lines, 3));
     grid.add(new LineSegments(lg, new LineBasicMaterial({color: line})));
@@ -99,11 +138,17 @@ export function parseStl(buf: ArrayBuffer): Float32Array {
   const n = buf.byteLength >= 84 ? dv.getUint32(80, true) : 0;
   if (n > 0 && 84 + n * 50 === buf.byteLength) {
     const out = new Float32Array(n * 9);
-    for (let t = 0; t < n; t++) {for (let k = 0; k < 9; k++) {out[t * 9 + k] = dv.getFloat32(84 + t * 50 + 12 + k * 4, true);}}
+    for (let t = 0; t < n; t++) {
+      for (let k = 0; k < 9; k++) {
+        out[t * 9 + k] = dv.getFloat32(84 + t * 50 + 12 + k * 4, true);
+      }
+    }
     return out;
   }
   const text = new TextDecoder().decode(buf);
   const nums = [...text.matchAll(/vertex\s+(\S+)\s+(\S+)\s+(\S+)/g)].flatMap((m) => [+m[1], +m[2], +m[3]]);
-  if (!nums.length || nums.some(Number.isNaN)) {throw new Error('Not a valid STL file');}
+  if (!nums.length || nums.some(Number.isNaN)) {
+    throw new Error('Not a valid STL file');
+  }
   return new Float32Array(nums);
 }

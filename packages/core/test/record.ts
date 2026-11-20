@@ -13,17 +13,31 @@ process.loadEnvFile?.('../../.env');
 const models = builtinModels();
 const [provider, ...id] = modelRef().split('/');
 const model = models.getModel(provider, id.join('/'));
-if (!model || !(await models.checkAuth(provider))) {throw new Error(`no model or key for ${modelRef()}`);}
+if (!model || !(await models.checkAuth(provider))) {
+  throw new Error(`no model or key for ${modelRef()}`);
+}
 
 const run = async (prompt: string, current?: Current) => {
-  const reply = await models.completeSimple(model, buildContext(prompt, current), {reasoning: 'minimal', sessionId: crypto.randomUUID()});
+  const reply = await models.completeSimple(model, buildContext(prompt, current), {
+    reasoning: 'minimal',
+    sessionId: crypto.randomUUID(),
+  });
   // Keep only what replay needs; drop usage and ids so diffs stay readable.
-  return {prompt, current, content: reply.content.filter((b) => b.type === 'toolCall'), stopReason: reply.stopReason, errorMessage: reply.errorMessage};
+  return {
+    prompt,
+    current,
+    content: reply.content.filter((b) => b.type === 'toolCall'),
+    stopReason: reply.stopReason,
+    errorMessage: reply.errorMessage,
+  };
 };
 
 const out = {model: modelRef(), cases: [] as Array<unknown>, paraphrases: [] as Array<unknown>};
-for (const c of cases) {out.cases.push(await run(c.prompt, c.current));}
-let pass = 0, total = 0;
+for (const c of cases) {
+  out.cases.push(await run(c.prompt, c.current));
+}
+let pass = 0,
+  total = 0;
 for (const [canonical, list] of Object.entries(paraphrases)) {
   const want = parsePrompt(canonical).spec;
   const replies = await Promise.all(list.map((p) => run(p)));
@@ -31,8 +45,11 @@ for (const [canonical, list] of Object.entries(paraphrases)) {
     total++;
     try {
       const got = readIntent(r);
-      if (got.type === 'spec' && sameSpec(got.spec, want)) {pass++;}
-      else {console.log('MISMATCH', r.prompt, JSON.stringify(got));}
+      if (got.type === 'spec' && sameSpec(got.spec, want)) {
+        pass++;
+      } else {
+        console.log('MISMATCH', r.prompt, JSON.stringify(got));
+      }
     } catch (error) {
       console.log('INVALID', r.prompt, (error as Error).message);
     }

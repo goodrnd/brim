@@ -9,7 +9,14 @@ export const modelRef = () => process.env.BRIM_MODEL || 'opencode-go/deepseek-v4
 export async function createIntent(models: Models = builtinModels()) {
   const [provider, ...id] = modelRef().split('/');
   const model = models.getModel(provider, id.join('/'));
-  if (!model || !(await models.checkAuth(provider))) {return undefined;} // no key: the client uses the regex parser
+  if (!model || !(await models.checkAuth(provider))) {
+    return undefined;
+  } // no key: the client uses the regex parser
   return async (prompt: string, current?: Current): Promise<Intent> =>
-    readIntent(await models.completeSimple(model, buildContext(prompt, current), {reasoning: 'minimal', sessionId: crypto.randomUUID()}));
+    readIntent(
+      await models.completeSimple(model, buildContext(prompt, current), {
+        reasoning: 'minimal',
+        sessionId: crypto.randomUUID(),
+      }),
+    );
 }

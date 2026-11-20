@@ -16,4 +16,6 @@ export const cases: Array<{prompt: string; current?: Current}> = [
 
 /** Specs match when every number agrees to 0.1 mm (LLMs write 120 as 120.0, cm conversions round). */
 export const sameSpec = (a: Spec, b: Spec) =>
-  (Object.keys(a) as Array<keyof Spec>).every((k) => (typeof a[k] === 'number' ? Math.abs((a[k] as number) - (b[k] as number)) < 0.1 : a[k] === b[k]));
+  (Object.keys(a) as Array<keyof Spec>).every((k) =>
+    typeof a[k] === 'number' ? Math.abs((a[k] as number) - (b[k] as number)) < 0.1 : a[k] === b[k],
+  );
