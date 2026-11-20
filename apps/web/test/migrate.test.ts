@@ -26,6 +26,16 @@ void test('moves brim-models to brim-parts and renames job fields', () => {
   assert.deepEqual(s.m, after, 'second run is a no-op');
 });
 
+void test('moves Part.projectId into brim-uses', () => {
+  const s = store({'brim-parts': JSON.stringify([{id: '1', projectId: 'a'}, {id: '2'}])});
+  migrate(s);
+  assert.deepEqual(JSON.parse(s.m.get('brim-parts')!), [{id: '1'}, {id: '2'}]);
+  assert.deepEqual(JSON.parse(s.m.get('brim-uses')!), [{projectId: 'a', itemId: '1', qty: 1}]);
+  const after = new Map(s.m);
+  migrate(s);
+  assert.deepEqual(s.m, after, 'second run is a no-op');
+});
+
 void test('never overwrites existing parts and survives broken jobs', () => {
   const s = store({'brim-models': '[{"id":"old"}]', 'brim-parts': '[{"id":"new"}]', 'brim-jobs': '{oops'});
   migrate(s);

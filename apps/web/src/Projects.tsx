@@ -11,19 +11,21 @@ import {
 } from '@earendil-works/elanor-react';
 import type {ReactNode} from 'react';
 import {AddIcon, ArrowBackIcon, DeleteIcon} from './icons.ts';
-import {count, edited, type Note, type Project} from './library.ts';
+import {count, edited, itemsIn, type Note, type Project, type Use} from './library.ts';
 
-type Thumb = {projectId?: string; thumb?: string; edited?: number};
+type Thumb = {id: string; thumb?: string; edited?: number};
 
 /** Projects block at the top of the Library. */
 export function ProjectList({
   projects,
   parts,
   notes,
+  uses,
 }: {
   projects: Array<Project>;
   parts: Array<Thumb>;
   notes: Array<Note>;
+  uses: Array<Use>;
 }) {
   if (!projects.length) {
     return null;
@@ -36,7 +38,8 @@ export function ProjectList({
       </Heading>
       <ul className="model-list">
         {sorted.map((p) => {
-          const own = parts.filter((x) => x.projectId === p.id);
+          const ids = itemsIn(p.id, uses);
+          const own = parts.filter((x) => ids.has(x.id));
           const thumb = [...own].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0)).find((x) => x.thumb)?.thumb;
           const href = `#/project/${p.id}`;
           return (
@@ -119,7 +122,7 @@ export function ProjectPage(props: {
             <EmptyState.Body>
               <EmptyState.Copy>
                 <EmptyState.Title level={3}>No parts yet</EmptyState.Title>
-                <EmptyState.Description>Create a part here, or move one in from its page.</EmptyState.Description>
+                <EmptyState.Description>Create a part here, or add one from its page.</EmptyState.Description>
               </EmptyState.Copy>
             </EmptyState.Body>
           </EmptyState.Root>
@@ -165,32 +168,34 @@ export function ProjectPage(props: {
 
 const NEW = '\0new'; // sentinel item value; never a real project id
 
-/** Moves the current part into a project, out of one, or into a new one. */
+/** Picks the projects the current part is used in, or adds it to a new one. */
 export function ProjectPicker({
   value,
   projects,
   onChange,
   onCreate,
 }: {
-  value?: string;
+  value: Array<string>;
   projects: Array<Project>;
-  onChange: (id?: string) => void;
+  onChange: (ids: Array<string>) => void;
   onCreate: () => void;
 }) {
+  const label = (ids: Array<string>) =>
+    ids.length === 0
+      ? 'No project'
+      : ids.length === 1
+        ? (projects.find((p) => p.id === ids[0])?.name ?? 'No project')
+        : count(ids.length, 'project');
   return (
-    <Dropdown.Root
-      value={value ?? ''}
-      onValueChange={(v) => (v === NEW ? onCreate() : onChange((v as string) || undefined))}
-    >
-      <Dropdown.Trigger aria-label="Project" density="compact" className="picker">
-        <Dropdown.Value>{(v: string) => projects.find((p) => p.id === v)?.name ?? 'No project'}</Dropdown.Value>
+    <Dropdown.Root multiple value={value} onValueChange={(v) => (v.includes(NEW) ? onCreate() : onChange(v))}>
+      <Dropdown.Trigger aria-label="Projects" density="compact" className="picker">
+        <Dropdown.Value>{label}</Dropdown.Value>
         <Dropdown.Icon />
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Positioner>
           <Dropdown.Popup>
             <Dropdown.List>
-              <Dropdown.Item value="">No project</Dropdown.Item>
               {projects.map((p) => (
                 <Dropdown.Item key={p.id} value={p.id}>
                   {p.name}

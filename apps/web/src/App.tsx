@@ -87,7 +87,17 @@ import {AccountSettings, demoAccount, Login, type Account} from './Account.tsx';
 import {go, useRoute} from './route.ts';
 import {useStored} from './store.ts';
 import {parseStl, Viewer} from './Viewer.tsx';
-import {count, edited, isLoose, removeProject, type Note, type Project} from './library.ts';
+import {
+  count,
+  edited,
+  itemsIn,
+  projectsOf,
+  removeProject,
+  withProjects,
+  type Note,
+  type Project,
+  type Use,
+} from './library.ts';
 import {ProjectList, ProjectPage, ProjectPicker} from './Projects.tsx';
 
 const examples = [
@@ -120,7 +130,6 @@ interface Part {
   thumb?: string; // webp data URL of the viewer
   history: Array<Entry>;
   edited?: number; // ms timestamp of the last design change or rename
-  projectId?: string; // unset: a loose part
 }
 
 const sections = ['design', 'refine', 'print'];
@@ -255,27 +264,32 @@ export function App() {
   const [materials, setMaterials] = useStored<Record<string, Material>>('brim-materials', () => stockMaterials);
   const [projects, setProjects] = useStored<Array<Project>>('brim-projects', () => []);
   const [notes, setNotes] = useStored<Array<Note>>('brim-notes', () => []);
+  const [uses, setUses] = useStored<Array<Use>>('brim-uses', () => []);
   const route = useRoute();
   const page = route[0] === 'model' ? 'part' : (route[0] ?? 'home'); // old #/model/ links still open
   const part = page === 'part' ? parts.find((p) => p.id === route[1]) : undefined;
-  const project = projects.find((p) => p.id === (page === 'project' || page === 'new' ? route[1] : part?.projectId));
+  const partProjects = part ? projectsOf(part.id, uses).filter((id) => projects.some((p) => p.id === id)) : [];
+  // A part page links back to its project only when there is just one.
+  const project = projects.find(
+    (p) => p.id === (page === 'project' || page === 'new' ? route[1] : partProjects.length === 1 && partProjects[0]),
+  );
+  const projectParts = (id: string) => ((ids) => parts.filter((p) => ids.has(p.id)))(itemsIn(id, uses));
   // shortcut: window.prompt for the name; swap for a Modal like RenameButton if it feels rough.
-  const newProject = (movePartId?: string) => {
+  const newProject = (addPartId?: string) => {
     const name = prompt('Project name')?.trim();
     if (!name) {
       return;
     }
-    // oxlint-disable-next-line react/purity -- event handler, not render
     const p: Project = {id: crypto.randomUUID(), name, edited: Date.now()};
     setProjects((ps) => [p, ...ps]);
-    if (movePartId) {
-      patch(movePartId, (x) => ({...x, projectId: p.id}));
+    if (addPartId) {
+      setUses((us) => [...us, {projectId: p.id, itemId: addPartId, qty: 1}]);
     } else {
       go(`project/${p.id}`);
     }
   };
   const deleteProject = (p: Project) => {
-    const n = parts.filter((x) => x.projectId === p.id).length;
+    const n = projectParts(p.id).length;
     if (
       !confirm(
         `Delete project “${p.name}”? Its ${count(n, 'part')} stay in the Library; its ${count(notes.filter((x) => x.projectId === p.id).length, 'note')} are deleted.`,
@@ -283,9 +297,9 @@ export function App() {
     ) {
       return;
     }
-    const r = removeProject(p.id, {projects, parts, notes});
+    const r = removeProject(p.id, {projects, uses, notes});
     setProjects(r.projects);
-    setParts(r.parts);
+    setUses(r.uses);
     setNotes(r.notes);
     go('library');
   };
@@ -294,18 +308,21 @@ export function App() {
   const patch = (id: string, f: (p: Part) => Part) => setParts((ps) => ps.map((p) => (p.id === id ? f(p) : p)));
   const edit = (f: (p: Part) => Part) => part && patch(part.id, (p) => ({...f(p), edited: Date.now()}));
   const setHistory = (f: (h: Array<Entry>) => Array<Entry>) => edit((p) => ({...p, history: f(p.history)}));
-  const create = (p: Omit<Part, 'id' | 'edited' | 'projectId'> & {projectId?: string}) => {
+  const create = (p: Omit<Part, 'id' | 'edited'>, projectIds: Array<string> = []) => {
     // oxlint-disable-next-line react/purity -- event handler, not render
     const next = {...p, id: crypto.randomUUID(), edited: Date.now()};
     setParts((ps) => [next, ...ps]);
+    setUses((us) => withProjects(next.id, projectIds, us));
     go(`part/${next.id}/refine`);
   };
-  const duplicate = () => part && create({...part, name: title(part) + ' copy'});
+  const duplicate = () => part && create({...part, name: title(part) + ' copy'}, partProjects);
   const remove = () => {
-    if (!part || !confirm(`Delete “${title(part)}”? This cannot be undone.`)) {
+    const used = partProjects.length ? ` It is used in ${count(partProjects.length, 'project')}.` : '';
+    if (!part || !confirm(`Delete “${title(part)}”?${used} This cannot be undone.`)) {
       return;
     }
     setParts((ps) => ps.filter((p) => p.id !== part.id));
+    setUses((us) => us.filter((u) => u.itemId !== part.id));
     go('library');
   };
   const [settings, setSettings] = useStored<SliceSettings>('brim-slice', () => ({
@@ -340,7 +357,7 @@ export function App() {
     if (part) {
       setHistory((h) => [...h, e]);
     } else {
-      create({history: [e], projectId: project?.id});
+      create({history: [e]}, project ? [project.id] : []);
     }
   };
   const refine = async (prompt: string) => {
@@ -356,7 +373,7 @@ export function App() {
         changes: [`${fixed.length / 9} triangles`],
         model: {type: 'mesh', name: file.name.replace(/\.stl$/i, ''), positions: fixed},
       };
-      create({history: [entry], projectId});
+      create({history: [entry]}, projectId ? [projectId] : []);
     } catch (error) {
       alert((error as Error).message);
     }
@@ -501,8 +518,8 @@ export function App() {
                 project={project}
                 notes={notes}
                 setNotes={setNotes}
-                partCount={parts.filter((p) => p.projectId === project.id).length}
-                parts={<PartList parts={parts.filter((p) => p.projectId === project.id)} />}
+                partCount={projectParts(project.id).length}
+                parts={<PartList parts={projectParts(project.id)} />}
                 actions={
                   <>
                     <RenameButton
@@ -578,6 +595,7 @@ export function App() {
                 parts={parts}
                 projects={projects}
                 notes={notes}
+                uses={uses}
                 onUpload={(f) => upload(f)}
                 onNewProject={() => newProject()}
               />
@@ -601,9 +619,9 @@ export function App() {
                   <PageHeader.Title level={1}>{title(part)}</PageHeader.Title>
                   <PageHeader.Actions>
                     <ProjectPicker
-                      value={project?.id}
+                      value={partProjects}
                       projects={projects}
-                      onChange={(projectId) => patch(part.id, (p) => ({...p, projectId}))}
+                      onChange={(ids) => setUses((us) => withProjects(part.id, ids, us))}
                       onCreate={() => newProject(part.id)}
                     />
                     <RenameButton
@@ -805,16 +823,17 @@ function Library({
   parts,
   projects,
   notes,
+  uses,
   onUpload,
   onNewProject,
 }: {
   parts: Array<Part>;
   projects: Array<Project>;
   notes: Array<Note>;
+  uses: Array<Use>;
   onUpload: (f: File) => void;
   onNewProject: () => void;
 }) {
-  const loose = parts.filter((p) => isLoose(p, projects));
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
@@ -837,15 +856,15 @@ function Library({
           , saved in this browser.
         </PageHeader.Description>
       </PageHeader.Root>
-      <ProjectList projects={projects} parts={parts} notes={notes} />
-      {loose.length ? (
+      <ProjectList projects={projects} parts={parts} notes={notes} uses={uses} />
+      {parts.length ? (
         <Stack gap="small" align="stretch">
           {projects.length > 0 && (
             <Heading level={2} size={5}>
-              Loose parts
+              Parts
             </Heading>
           )}
-          <PartList parts={loose} />
+          <PartList parts={parts} />
         </Stack>
       ) : projects.length ? null : (
         <EmptyState.Root>
