@@ -1,0 +1,89 @@
+body {
+  position: relative;
+  margin: 0;
+  background: var(--semantic-color-background-canvas);
+  color: var(--semantic-color-text-primary);
+}
+
+.header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  padding: var(--semantic-dimension-space-padding-medium) var(--semantic-dimension-space-padding-large);
+  border-block-end: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+  background: var(--semantic-color-background-canvas);
+  white-space: nowrap;
+}
+
+
+.sidebar {
+  position: sticky;
+  inset-block-start: 4.5rem;
+  block-size: calc(100dvh - 4.5rem);
+  border-inline-end: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+}
+
+.main {
+  padding-block: var(--semantic-dimension-space-padding-x-large);
+  min-inline-size: 0;
+}
+
+.panel {
+  padding-block-start: var(--semantic-dimension-space-padding-large);
+}
+
+.full {
+  inline-size: 100%;
+}
+
+
+.main {
+  flex: 1;
+  padding-inline: var(--semantic-dimension-space-padding-x-large);
+}
+
+.muted {
+  color: var(--semantic-color-text-secondary);
+}
+
+.negative {
+  color: var(--semantic-color-text-negative);
+}
+
+.viewer {
+  block-size: min(62vh, 560px);
+  border: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+  border-radius: var(--semantic-dimension-radius-small);
+  background: var(--semantic-color-background-fill-secondary);
+  overflow: hidden;
+  cursor: grab;
+}
+
+.layer {
+  inline-size: 100%;
+  max-inline-size: 22rem;
+  margin-inline: auto;
+  aspect-ratio: 1;
+  background: var(--semantic-color-background-canvas);
+}
+
+.history {
+  margin: 0;
+  padding-inline-start: var(--semantic-dimension-space-padding-large);
+  display: grid;
+  gap: var(--semantic-dimension-space-gap-small);
+  max-block-size: 18rem;
+  overflow: auto;
+}
+
+/* Hidden until the theme tokens load, so there is no unstyled flash. */
+html:not([data-ready]) body {
+  visibility: hidden;
+}
+
+
+/* Border toggle: transparent rather than removed, so the layout does not shift. */
+html[data-borders='off'] .header,
+html[data-borders='off'] .sidebar {
+  border-color: transparent;
+}
