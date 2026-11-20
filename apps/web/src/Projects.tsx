@@ -168,7 +168,7 @@ export function ProjectPage(props: {
 
 const NEW = '\0new'; // sentinel item value; never a real project id
 
-/** Picks the projects the current part is used in, or adds it to a new one. */
+/** Edits the projects the current part is used in, or adds it to a new one. */
 export function ProjectPicker({
   value,
   projects,
@@ -180,16 +180,10 @@ export function ProjectPicker({
   onChange: (ids: Array<string>) => void;
   onCreate: () => void;
 }) {
-  const label = (ids: Array<string>) =>
-    ids.length === 0
-      ? 'No project'
-      : ids.length === 1
-        ? (projects.find((p) => p.id === ids[0])?.name ?? 'No project')
-        : count(ids.length, 'project');
   return (
     <Dropdown.Root multiple value={value} onValueChange={(v) => (v.includes(NEW) ? onCreate() : onChange(v))}>
       <Dropdown.Trigger aria-label="Projects" density="compact" className="picker">
-        <Dropdown.Value>{label}</Dropdown.Value>
+        <Dropdown.Value>{() => 'Edit projects'}</Dropdown.Value>
         <Dropdown.Icon />
       </Dropdown.Trigger>
       <Dropdown.Portal>

@@ -618,12 +618,6 @@ export function App() {
                 <PageHeader.Row>
                   <PageHeader.Title level={1}>{title(part)}</PageHeader.Title>
                   <PageHeader.Actions>
-                    <ProjectPicker
-                      value={partProjects}
-                      projects={projects}
-                      onChange={(ids) => setUses((us) => withProjects(part.id, ids, us))}
-                      onCreate={() => newProject(part.id)}
-                    />
                     <RenameButton
                       key={part.id}
                       what="part"
@@ -751,6 +745,33 @@ export function App() {
                   </Tabs.Root>
                 </Grid.Item>
               </Grid.Root>
+
+              <Stack gap="small" align="stretch">
+                <Stack direction="row" gap="auto" align="center">
+                  <Heading level={2} size={5}>
+                    Used in projects
+                  </Heading>
+                  <ProjectPicker
+                    value={partProjects}
+                    projects={projects}
+                    onChange={(ids) => setUses((us) => withProjects(part.id, ids, us))}
+                    onCreate={() => newProject(part.id)}
+                  />
+                </Stack>
+                {partProjects.length ? (
+                  <Stack direction="row" gap="medium" wrap="wrap">
+                    {projects
+                      .filter((p) => partProjects.includes(p.id))
+                      .map((p) => (
+                        <a key={p.id} href={`#/project/${p.id}`}>
+                          {p.name}
+                        </a>
+                      ))}
+                  </Stack>
+                ) : (
+                  <Text className="muted">Not used in any project yet.</Text>
+                )}
+              </Stack>
             </Stack>
           )}
         </main>
