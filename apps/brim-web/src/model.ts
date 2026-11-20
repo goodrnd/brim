@@ -1,6 +1,6 @@
 import {ExtrudeGeometry, Path, Shape} from 'three';
 
-// shortcut: prompts are parsed locally with keywords and numbers, not an LLM; plug a model in parsePrompt when an API is available.
+// Regex prompt parser: the fallback when no LLM key is configured (see intent.ts).
 
 export type Kind =
   | 'vase' | 'cup' | 'cylinder' | 'tube' | 'cone' | 'sphere'
@@ -26,12 +26,14 @@ export type Model =
   | {type: 'param'; spec: Spec}
   | {type: 'mesh'; name: string; positions: Float32Array};
 
-const base: Spec = {
+export const kinds: Kind[] = ['vase', 'cup', 'cylinder', 'tube', 'cone', 'sphere', 'box', 'plate', 'gear', 'hex', 'star', 'tag'];
+
+export const base: Spec = {
   kind: 'box', width: 40, depth: 40, height: 40, wall: 0, hole: 0,
   teeth: 20, points: 5, ribs: 0, twist: 0, taper: 1, corner: 0, segments: 96,
 };
 
-const defaults: Record<Kind, Partial<Spec>> = {
+export const defaults: Record<Kind, Partial<Spec>> = {
   vase: {width: 60, height: 120, wall: 2, taper: 0.8},
   cup: {width: 80, height: 90, wall: 3},
   cylinder: {width: 30, height: 40},
@@ -97,7 +99,7 @@ export function parsePrompt(prompt: string, prev?: Spec): {spec: Spec; changes: 
   let s: Spec;
   if (!prev || (kind && kind !== prev.kind)) {
     const k = kind ?? prev?.kind ?? 'box';
-    s = {...base, ...defaults[k], kind: k};
+    s = newSpec(k);
     if (prev) changes.push(`turned it into a ${k}`);
   } else s = {...prev};
   const set = <K extends keyof Spec>(key: K, value: Spec[K], note: string) => {
@@ -189,12 +191,64 @@ export function parsePrompt(prompt: string, prev?: Spec): {spec: Spec; changes: 
   const corner = grab(t, 'corners?|fillets?|corner radius');
   if (corner) set('corner', corner, `${fmt(corner)} mm corners`);
 
-  if (round.has(s.kind)) s.depth = s.width;
-  if (s.kind === 'sphere') s.height = s.width;
-  s.wall = Math.min(s.wall, Math.min(s.width, s.depth) / 2 - 1);
-  s.hole = Math.min(s.hole, Math.min(s.width, s.depth) * 0.8);
+  normalize(s);
   if (!prev) changes.unshift(describe(s));
   return {spec: s, changes};
+}
+
+export const newSpec = (kind: Kind, over: Partial<Spec> = {}): Spec => normalize({...base, ...defaults[kind], ...over, kind});
+
+/** Enforces the shape rules every spec must satisfy, in place. */
+export function normalize(s: Spec): Spec {
+  if (round.has(s.kind)) s.depth = s.width;
+  if (s.kind === 'sphere') s.height = s.width;
+  s.wall = Math.max(0, Math.min(s.wall, Math.min(s.width, s.depth) / 2 - 1));
+  s.hole = Math.min(s.hole, Math.min(s.width, s.depth) * 0.8);
+  return s;
+}
+
+/** Edits the LLM may return. Factors are relative (1 = unchanged); axes are X=width, Y=depth, Z=height. */
+export type Op =
+  | {op: 'set'; field: NumField; value: number}
+  | {op: 'scale'; x: number; y: number; z: number}
+  | {op: 'rotate'; axis: 'x' | 'y' | 'z'; degrees: number};
+export type NumField = Exclude<keyof Spec, 'kind'>;
+export const numFields = Object.keys(base).filter((k) => k !== 'kind') as NumField[];
+
+export const describeOp = (o: Op) =>
+  o.op === 'set' ? `set ${o.field} ${fmt(o.value)}`
+  : o.op === 'scale' ? `scale ${[o.x, o.y, o.z].map(fmt).join(' × ')}`
+  : `rotate ${fmt(o.degrees)}° about ${o.axis.toUpperCase()}`;
+
+/** Applies ops to a model. Returns the new model and one note per op. */
+export function applyOps(m: Model, ops: Op[]): {model: Model; changes: string[]} {
+  const changes: string[] = [];
+  if (m.type === 'param') {
+    const s = {...m.spec};
+    for (const o of ops) {
+      if (o.op === 'set') s[o.field] = o.value;
+      else if (o.op === 'scale') (s.width *= o.x), (s.depth *= o.y), (s.height *= o.z);
+      else { changes.push(`skipped ${describeOp(o)}: rotation applies to imported meshes`); continue; }
+      changes.push(describeOp(o));
+    }
+    return {model: {type: 'param', spec: normalize(s)}, changes};
+  }
+  const p = new Float32Array(m.positions);
+  for (const o of ops) {
+    if (o.op === 'scale') for (let i = 0; i < p.length; i += 3) (p[i] *= o.x), (p[i + 1] *= o.y), (p[i + 2] *= o.z);
+    else if (o.op === 'rotate') {
+      const a = (o.degrees * Math.PI) / 180;
+      const [c, sn] = [Math.cos(a), Math.sin(a)];
+      const [u, v] = o.axis === 'x' ? [1, 2] : o.axis === 'y' ? [2, 0] : [0, 1];
+      for (let i = 0; i < p.length; i += 3) {
+        const [pu, pv] = [p[i + u], p[i + v]];
+        p[i + u] = pu * c - pv * sn;
+        p[i + v] = pu * sn + pv * c;
+      }
+    } else { changes.push(`skipped ${describeOp(o)}: imported meshes have no ${o.field}`); continue; }
+    changes.push(describeOp(o));
+  }
+  return {model: {...m, positions: finalize(Array.from(p))}, changes};
 }
 
 /** Scales or flips an uploaded mesh. */

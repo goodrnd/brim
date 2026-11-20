@@ -35,7 +35,8 @@ import lefosCss from '@earendil-works/design-tokens/lefos.css?url';
 import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import * as I from './icons.ts';
 import {LayerPreview} from './LayerPreview.tsx';
-import {bounds, buildPositions, describe, editMesh, parsePrompt, toStl, volume, type Model} from './model.ts';
+import {applyOps, bounds, buildPositions, describe, editMesh, parsePrompt, toStl, volume, type Model} from './model.ts';
+import type {Current, Intent} from './intent.ts';
 import {materials as stockMaterials, printers as stockPrinters, slice, type Material, type Printer, type SliceResult, type SliceSettings} from './slicer.ts';
 import {hms, Jobs, type Job} from './Jobs.tsx';
 import {Settings} from './Settings.tsx';
@@ -125,6 +126,33 @@ const download = (data: BlobPart, name: string, type: string) => {
   a.click();
   URL.revokeObjectURL(a.href);
 };
+/** Asks the dev server's LLM; undefined when none is configured or it fails, so callers use the regex parser. */
+async function askLlm(prompt: string, m?: Model): Promise<Intent | undefined> {
+  const current: Current | undefined = !m ? undefined : m.type === 'param' ? m : {type: 'mesh', name: m.name, size: ((b) => b[1].map((v, k) => v - b[0][k]))(bounds(m.positions))};
+  try {
+    const r = await fetch('/api/intent', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({prompt, current})});
+    if (r.ok) return await r.json();
+    if (r.status !== 404) console.warn('brim: LLM intent failed, using the regex parser:', await r.text());
+  } catch {}
+}
+
+/** Resolves a prompt to the next history entry, via the LLM when available. */
+async function resolve(prompt: string, m?: Model): Promise<Entry> {
+  const intent = await askLlm(prompt, m);
+  if (intent?.type === 'spec') return {prompt, changes: [describe(intent.spec)], model: {type: 'param', spec: intent.spec}};
+  if (intent && m) return {prompt, ...applyOps(m, intent.ops)};
+  if (!m) {
+    const {spec, changes} = parsePrompt(prompt);
+    return {prompt, changes, model: {type: 'param', spec}};
+  }
+  if (m.type === 'param') {
+    const {spec, changes} = parsePrompt(prompt, m.spec);
+    return {prompt, changes: changes.length ? changes : ['nothing I understood, so no change'], model: {type: 'param', spec}};
+  }
+  const {positions: p, changes} = editMesh(prompt, m.positions);
+  return {prompt, changes: changes.length ? changes : ['imported meshes support scale, taller, wider, flip and rotate'], model: {...m, positions: p}};
+}
+
 const slug = (m: Model) => (m.type === 'mesh' ? m.name : m.spec.kind + '-' + Math.round(m.spec.width) + 'mm');
 
 export function App() {
@@ -167,19 +195,13 @@ export function App() {
   );
   const printer = printers[sliceSettings.printer];
 
-  const generate = (prompt: string) => {
-    const {spec, changes} = parsePrompt(prompt);
-    setHistory((h) => [...h, {prompt, changes, model: {type: 'param', spec}}]);
+  const generate = async (prompt: string) => {
+    const e = await resolve(prompt);
+    setHistory((h) => [...h, e]);
   };
-  const refine = (prompt: string) => {
-    const m = current.model;
-    if (m.type === 'param') {
-      const {spec, changes} = parsePrompt(prompt, m.spec);
-      setHistory((h) => [...h, {prompt, changes: changes.length ? changes : ['nothing I understood, so no change'], model: {type: 'param', spec}}]);
-    } else {
-      const {positions: p, changes} = editMesh(prompt, m.positions);
-      setHistory((h) => [...h, {prompt, changes: changes.length ? changes : ['imported meshes support scale, taller, wider, flip and rotate'], model: {...m, positions: p}}]);
-    }
+  const refine = async (prompt: string) => {
+    const e = await resolve(prompt, current.model);
+    setHistory((h) => [...h, e]);
   };
   const upload = async (file: File) => {
     try {
@@ -323,7 +345,7 @@ export function App() {
                       action="Generate STL"
                       icon={<I.AutoFixHighIcon />}
                       chips={examples}
-                      onSubmit={(p) => (generate(p), setTab('refine'))}
+                      onSubmit={(p) => generate(p).then(() => setTab('refine'))}
                     />
                   </Tabs.Panel>
                   <Tabs.Panel value="refine" className="panel">
@@ -451,9 +473,14 @@ function UploadButton({onFile}: {onFile: (f: File) => void}) {
   );
 }
 
-function PromptBox(props: {label: string; placeholder: string; action: string; icon: ReactNode; chips: string[]; onSubmit: (p: string) => void}) {
+function PromptBox(props: {label: string; placeholder: string; action: string; icon: ReactNode; chips: string[]; onSubmit: (p: string) => Promise<void>}) {
   const [value, setValue] = useState('');
-  const submit = (p: string) => p.trim() && (props.onSubmit(p.trim()), setValue(''));
+  const [busy, setBusy] = useState(false);
+  const submit = (p: string) => {
+    if (!p.trim() || busy) return;
+    setBusy(true);
+    props.onSubmit(p.trim()).then(() => setValue('')).finally(() => setBusy(false));
+  };
   return (
     <Stack gap="medium" align="stretch">
       <Field.Root name="prompt">
@@ -471,11 +498,11 @@ function PromptBox(props: {label: string; placeholder: string; action: string; i
         </Field.Description>
       </Field.Root>
       <Stack direction="row" gap="small">
-        <Button iconStart={props.icon} disabled={!value.trim()} onClick={() => submit(value)}>{props.action}</Button>
+        <Button iconStart={props.icon} disabled={!value.trim() || busy} onClick={() => submit(value)}>{busy ? 'Thinking…' : props.action}</Button>
       </Stack>
       <Stack direction="row" gap="xSmall" wrap="wrap">
         {props.chips.map((c) => (
-          <Button key={c} hierarchy="secondary" density="compact" onClick={() => submit(c)}>{c}</Button>
+          <Button key={c} hierarchy="secondary" density="compact" disabled={busy} onClick={() => submit(c)}>{c}</Button>
         ))}
       </Stack>
     </Stack>
