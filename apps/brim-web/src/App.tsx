@@ -268,20 +268,10 @@ export function App() {
                   <SideNavigation.List>
                     {([['models', 'Models', <I.FolderOpenIcon />], ['queue', `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`, <I.ScheduleIcon />], ['settings', 'Printers & materials', <I.SettingsIcon />]] as const).map(([v, label, icon]) => (
                       <SideNavigation.Item key={v}>
-                        <SideNavigation.Link href="#" iconStart={icon} active={tab === v} onClick={(e) => (e.preventDefault(), setTab(v))}>{label}</SideNavigation.Link>
+                        <SideNavigation.Link href="#" iconStart={icon} active={tab === v || (v === 'models' && ['design', 'refine', 'print'].includes(tab))} onClick={(e) => (e.preventDefault(), setTab(v))}>{label}</SideNavigation.Link>
                       </SideNavigation.Item>
                     ))}
                   </SideNavigation.List>
-                  <SideNavigation.Group>
-                    <SideNavigation.GroupLabel>{title(project)}</SideNavigation.GroupLabel>
-                    <SideNavigation.List>
-                      {([['design', '1 · Design', <I.AutoFixHighIcon />], ['refine', '2 · Refine', <I.TuneIcon />], ['print', '3 · Print files', <I.PrintIcon />]] as const).map(([v, label, icon]) => (
-                        <SideNavigation.Item key={v}>
-                          <SideNavigation.Link href="#" iconStart={icon} active={tab === v} onClick={(e) => (e.preventDefault(), setTab(v))}>{label}</SideNavigation.Link>
-                        </SideNavigation.Item>
-                      ))}
-                    </SideNavigation.List>
-                  </SideNavigation.Group>
                 </SideNavigation.Root>
               </Sidebar.Content>
               <Sidebar.Footer>
@@ -322,6 +312,13 @@ export function App() {
               </PageHeader.Description>
             </PageHeader.Root>
 
+            <Tabs.Root value={tab} onValueChange={(v) => setTab(v as string)}>
+              <Tabs.List aria-label="Workflow" className="sections">
+                <Tabs.Tab value="design"><I.AutoFixHighIcon />Design</Tabs.Tab>
+                <Tabs.Tab value="refine"><I.TuneIcon />Refine</Tabs.Tab>
+                <Tabs.Tab value="print"><I.PrintIcon />Print files</Tabs.Tab>
+                <Tabs.Indicator className="sections-indicator" />
+              </Tabs.List>
             <Grid.Root>
               <Grid.Item span={{base: 'full', medium: 7}}>
                 <Stack gap="medium" align="stretch">
@@ -330,13 +327,6 @@ export function App() {
                 </Stack>
               </Grid.Item>
               <Grid.Item span={{base: 'full', medium: 5}}>
-                <Tabs.Root value={tab} onValueChange={(v) => setTab(v as string)}>
-                  <Tabs.List aria-label="Workflow">
-                    <Tabs.Tab value="design">Design</Tabs.Tab>
-                    <Tabs.Tab value="refine">Refine</Tabs.Tab>
-                    <Tabs.Tab value="print">Print files</Tabs.Tab>
-                    <Tabs.Indicator />
-                  </Tabs.List>
                   <Tabs.Panel value="design" className="panel">
                     <PromptBox
                       key="design"
@@ -382,9 +372,9 @@ export function App() {
                       }}
                     />
                   </Tabs.Panel>
-                </Tabs.Root>
               </Grid.Item>
             </Grid.Root>
+            </Tabs.Root>
           </Stack>
           )}
         </main>
@@ -406,30 +396,31 @@ function Library({projects, onOpen, onNew, onUpload}: {projects: Project[]; onOp
         </PageHeader.Row>
         <PageHeader.Description>{projects.length} {projects.length === 1 ? 'model' : 'models'}, saved in this browser.</PageHeader.Description>
       </PageHeader.Root>
-      <Grid.Root>
+      <ul className="model-list">
         {projects.map((p) => {
           const m = p.history[p.history.length - 1].model;
           return (
-            <Grid.Item key={p.id} span={{base: 'full', small: 6, large: 4}}>
-              <Card>
-                <Stack gap="medium" align="stretch">
-                  {p.thumb ? <img className="thumb" src={p.thumb} alt="" /> : <div className="thumb" />}
-                  <Stack gap="xSmall" align="stretch">
-                    <Heading level={2} size={5}>{title(p)}</Heading>
-                    <Text className="muted">{m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved'}</Text>
-                    <Text className="muted">{p.history.length} {p.history.length === 1 ? 'step' : 'steps'}</Text>
-                  </Stack>
-                  <Stack direction="row" gap="xSmall" wrap="wrap">
-                    <Button density="compact" iconStart={<I.AutoFixHighIcon />} onClick={() => onOpen(p.id, 'design')}>Design</Button>
-                    <Button density="compact" hierarchy="secondary" iconStart={<I.TuneIcon />} onClick={() => onOpen(p.id, 'refine')}>Refine</Button>
-                    <Button density="compact" hierarchy="secondary" iconStart={<I.PrintIcon />} onClick={() => onOpen(p.id, 'print')}>Print</Button>
-                  </Stack>
-                </Stack>
-              </Card>
-            </Grid.Item>
+            <li key={p.id}>
+              {/* Image link is a mouse shortcut; the title link is the one keyboard and screen reader users get. */}
+              <a href="#" className="card-link" tabIndex={-1} aria-hidden onClick={(e) => (e.preventDefault(), onOpen(p.id, 'design'))}>
+                {p.thumb ? <img className="thumb" src={p.thumb} alt="" /> : <div className="thumb" />}
+              </a>
+              <Stack gap="xSmall" align="stretch">
+                <Heading level={2} size={5}>
+                  <a href="#" className="card-link" onClick={(e) => (e.preventDefault(), onOpen(p.id, 'design'))}>{title(p)}</a>
+                </Heading>
+                <Text className="muted">{m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved'}</Text>
+                <Text className="muted">{p.history.length} {p.history.length === 1 ? 'step' : 'steps'}</Text>
+              </Stack>
+              <Stack direction="row" gap="xSmall" wrap="wrap">
+                <Button density="compact" iconStart={<I.AutoFixHighIcon />} onClick={() => onOpen(p.id, 'design')}>Design</Button>
+                <Button density="compact" hierarchy="secondary" iconStart={<I.TuneIcon />} onClick={() => onOpen(p.id, 'refine')}>Refine</Button>
+                <Button density="compact" hierarchy="secondary" iconStart={<I.PrintIcon />} onClick={() => onOpen(p.id, 'print')}>Print</Button>
+              </Stack>
+            </li>
           );
         })}
-      </Grid.Root>
+      </ul>
     </Stack>
   );
 }
