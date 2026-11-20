@@ -150,7 +150,7 @@ async function resolve(prompt: string, m?: Model): Promise<Entry> {
     return {prompt, changes: changes.length ? changes : ['nothing I understood, so no change'], model: {type: 'param', spec}};
   }
   const {positions: p, changes} = editMesh(prompt, m.positions);
-  return {prompt, changes: changes.length ? changes : ['imported meshes support scale, taller, wider, flip and rotate'], model: {...m, positions: p}};
+  return {prompt, changes: changes.length ? changes : ['imported meshes support scale, taller, wider, flip, rotate and drilling a hole'], model: {...m, positions: p}};
 }
 
 const slug = (m: Model) => (m.type === 'mesh' ? m.name : m.spec.kind + '-' + Math.round(m.spec.width) + 'mm');

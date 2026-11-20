@@ -1,4 +1,5 @@
 import {ExtrudeGeometry, Path, Shape} from 'three';
+import {boolean} from './csg.ts';
 
 // Regex prompt parser: the fallback when no LLM key is configured (see intent.ts).
 
@@ -211,47 +212,65 @@ export function normalize(s: Spec): Spec {
 export type Op =
   | {op: 'set'; field: NumField; value: number}
   | {op: 'scale'; x: number; y: number; z: number}
-  | {op: 'rotate'; axis: 'x' | 'y' | 'z'; degrees: number};
+  | {op: 'rotate'; axis: 'x' | 'y' | 'z'; degrees: number}
+  /** `at` moves the part's bottom centre from the model's bottom centre, in mm. */
+  | {op: 'add' | 'subtract'; part: Spec; at: [number, number, number]};
 export type NumField = Exclude<keyof Spec, 'kind'>;
 export const numFields = Object.keys(base).filter((k) => k !== 'kind') as NumField[];
 
 export const describeOp = (o: Op) =>
   o.op === 'set' ? `set ${o.field} ${fmt(o.value)}`
   : o.op === 'scale' ? `scale ${[o.x, o.y, o.z].map(fmt).join(' × ')}`
-  : `rotate ${fmt(o.degrees)}° about ${o.axis.toUpperCase()}`;
+  : o.op === 'rotate' ? `rotate ${fmt(o.degrees)}° about ${o.axis.toUpperCase()}`
+  : `${o.op} ${describe(o.part)} at ${o.at.map(fmt).join(', ')}`;
 
-/** Applies ops to a model. Returns the new model and one note per op. */
+/** Applies ops to a model. Returns the new model and one note per op. A boolean turns a parametric model into a mesh. */
 export function applyOps(m: Model, ops: Op[]): {model: Model; changes: string[]} {
   const changes: string[] = [];
-  if (m.type === 'param') {
-    const s = {...m.spec};
-    for (const o of ops) {
+  for (const o of ops) {
+    if ('part' in o) {
+      const tool = buildPositions(o.part);
+      for (let i = 0; i < tool.length; i += 3) for (let k = 0; k < 3; k++) tool[i + k] += o.at[k];
+      try {
+        const p = boolean(m.type === 'param' ? buildPositions(m.spec) : m.positions, tool, o.op);
+        m = {type: 'mesh', name: m.type === 'mesh' ? m.name : m.spec.kind, positions: finalize(Array.from(p))};
+        changes.push(describeOp(o));
+      } catch (e) {
+        changes.push(`skipped ${describeOp(o)}: ${(e as Error).message}`);
+      }
+    } else if (m.type === 'param') {
+      const s = {...m.spec};
       if (o.op === 'set') s[o.field] = o.value;
       else if (o.op === 'scale') (s.width *= o.x), (s.depth *= o.y), (s.height *= o.z);
       else { changes.push(`skipped ${describeOp(o)}: rotation applies to imported meshes`); continue; }
+      m = {type: 'param', spec: normalize(s)};
+      changes.push(describeOp(o));
+    } else {
+      if (o.op === 'set') { changes.push(`skipped ${describeOp(o)}: imported meshes have no ${o.field}`); continue; }
+      m = {...m, positions: finalize(Array.from(transform(m.positions, o)))};
       changes.push(describeOp(o));
     }
-    return {model: {type: 'param', spec: normalize(s)}, changes};
   }
-  const p = new Float32Array(m.positions);
-  for (const o of ops) {
-    if (o.op === 'scale') for (let i = 0; i < p.length; i += 3) (p[i] *= o.x), (p[i + 1] *= o.y), (p[i + 2] *= o.z);
-    else if (o.op === 'rotate') {
-      const a = (o.degrees * Math.PI) / 180;
-      const [c, sn] = [Math.cos(a), Math.sin(a)];
-      const [u, v] = o.axis === 'x' ? [1, 2] : o.axis === 'y' ? [2, 0] : [0, 1];
-      for (let i = 0; i < p.length; i += 3) {
-        const [pu, pv] = [p[i + u], p[i + v]];
-        p[i + u] = pu * c - pv * sn;
-        p[i + v] = pu * sn + pv * c;
-      }
-    } else { changes.push(`skipped ${describeOp(o)}: imported meshes have no ${o.field}`); continue; }
-    changes.push(describeOp(o));
-  }
-  return {model: {...m, positions: finalize(Array.from(p))}, changes};
+  return {model: m, changes};
 }
 
-/** Scales or flips an uploaded mesh. */
+function transform(src: Float32Array, o: Extract<Op, {op: 'scale' | 'rotate'}>): Float32Array {
+  const p = new Float32Array(src);
+  if (o.op === 'scale') for (let i = 0; i < p.length; i += 3) (p[i] *= o.x), (p[i + 1] *= o.y), (p[i + 2] *= o.z);
+  else {
+    const a = (o.degrees * Math.PI) / 180;
+    const [c, sn] = [Math.cos(a), Math.sin(a)];
+    const [u, v] = o.axis === 'x' ? [1, 2] : o.axis === 'y' ? [2, 0] : [0, 1];
+    for (let i = 0; i < p.length; i += 3) {
+      const [pu, pv] = [p[i + u], p[i + v]];
+      p[i + u] = pu * c - pv * sn;
+      p[i + v] = pu * sn + pv * c;
+    }
+  }
+  return p;
+}
+
+/** Scales, flips or drills an uploaded mesh. */
 export function editMesh(prompt: string, positions: Float32Array): {positions: Float32Array; changes: string[]} {
   const t = prompt.toLowerCase();
   let [sx, sy, sz] = [1, 1, 1];
@@ -281,7 +300,15 @@ export function editMesh(prompt: string, positions: Float32Array): {positions: F
     }
     changes.push('rotated 90° about X');
   }
-  return {positions: finalize(Array.from(out)), changes};
+  let result = finalize(Array.from(out));
+  if (/\b(hole|drill|bore)\b/.test(t)) {
+    const d = grab(t, 'hole|bore') ?? 4;
+    const h = bounds(result)[1][2] + 2;
+    const r = applyOps({type: 'mesh', name: '', positions: result}, [{op: 'subtract', part: newSpec('cylinder', {width: d, height: h}), at: [0, 0, -1]}]);
+    if (r.model.type === 'mesh') result = r.model.positions;
+    changes.push(...r.changes);
+  }
+  return {positions: result, changes};
 }
 
 // ---------- geometry ----------
