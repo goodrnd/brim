@@ -14,6 +14,7 @@ export {OpenInNewIcon} from '@earendil-works/elanor-icons-react/open-in-new';
 export {EditIcon} from '@earendil-works/elanor-icons-react/edit';
 export {ContentCopyIcon} from '@earendil-works/elanor-icons-react/content-copy';
 export {DeleteIcon} from '@earendil-works/elanor-icons-react/delete';
+export {Inventory2Icon} from '@earendil-works/elanor-icons-react/inventory-2';
 export {FolderOpenIcon} from '@earendil-works/elanor-icons-react/folder-open';
 export {CheckCircleIcon} from '@earendil-works/elanor-icons-react/check-circle';
 export {WarningIcon} from '@earendil-works/elanor-icons-react/warning';

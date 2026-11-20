@@ -48,6 +48,7 @@ import {
   FolderOpenIcon,
   HelpIcon,
   HomeIcon,
+  Inventory2Icon,
   LayersIcon,
   LightModeIcon,
   PrintIcon,
@@ -302,7 +303,7 @@ export function App() {
     setProjects(r.projects);
     setUses(r.uses);
     setNotes(r.notes);
-    go('library');
+    go('projects');
   };
   const section = sections.includes(route[2]) ? route[2] : 'design';
   const setSection = (s: string) => part && go(`part/${part.id}/${s}`);
@@ -458,7 +459,8 @@ export function App() {
                     {(
                       [
                         ['home', 'Home', HomeIcon],
-                        ['library', 'Library', FolderOpenIcon],
+                        ['projects', 'Projects', FolderOpenIcon],
+                        ['library', 'Library', Inventory2Icon],
                         [
                           'queue',
                           `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`,
@@ -472,7 +474,9 @@ export function App() {
                           href={`#/${v === 'home' ? '' : v}`}
                           iconStart={<Icon />}
                           active={
-                            page === v || (v === 'library' && (page === 'part' || page === 'new' || page === 'project'))
+                            page === v ||
+                            (v === 'projects' && (page === 'project' || (page === 'new' && !!route[1]))) ||
+                            (v === 'library' && (page === 'part' || (page === 'new' && !route[1])))
                           }
                         >
                           {label}
@@ -552,7 +556,7 @@ export function App() {
                     <EmptyState.Title level={1}>Project not found</EmptyState.Title>
                   </EmptyState.Copy>
                   <EmptyState.Actions>
-                    <Button onClick={() => go('library')}>Back to Library</Button>
+                    <Button onClick={() => go('projects')}>Back to Projects</Button>
                   </EmptyState.Actions>
                 </EmptyState.Body>
               </EmptyState.Root>
@@ -591,15 +595,16 @@ export function App() {
               </EmptyState.Root>
             ) : page === 'home' ? (
               <Home parts={parts} projects={projects} jobs={jobs} />
-            ) : (
-              <Library
-                parts={parts}
+            ) : page === 'projects' ? (
+              <ProjectList
                 projects={projects}
+                parts={parts}
                 notes={notes}
                 uses={uses}
-                onUpload={(f) => upload(f)}
                 onNewProject={() => newProject()}
               />
+            ) : (
+              <Library parts={parts} onUpload={(f) => upload(f)} />
             )
           ) : (
             <Stack gap="xLarge" align="stretch">
@@ -813,21 +818,7 @@ function Home({parts, projects, jobs}: {parts: Array<Part>; projects: Array<Proj
   );
 }
 
-function Library({
-  parts,
-  projects,
-  notes,
-  uses,
-  onUpload,
-  onNewProject,
-}: {
-  parts: Array<Part>;
-  projects: Array<Project>;
-  notes: Array<Note>;
-  uses: Array<Use>;
-  onUpload: (f: File) => void;
-  onNewProject: () => void;
-}) {
+function Library({parts, onUpload}: {parts: Array<Part>; onUpload: (f: File) => void}) {
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
@@ -835,32 +826,16 @@ function Library({
           <PageHeader.Title level={1}>Library</PageHeader.Title>
           <PageHeader.Actions>
             <UploadButton onFile={onUpload} />
-            <Button hierarchy="secondary" iconStart={<FolderOpenIcon />} onClick={onNewProject}>
-              New project
-            </Button>
             <Button iconStart={<AddIcon />} onClick={() => go('new')}>
               New part
             </Button>
           </PageHeader.Actions>
         </PageHeader.Row>
-        <PageHeader.Description>
-          {[projects.length ? count(projects.length, 'project') : '', count(parts.length, 'part')]
-            .filter(Boolean)
-            .join(' · ')}
-          , saved in this browser.
-        </PageHeader.Description>
+        <PageHeader.Description>{count(parts.length, 'part')}, saved in this browser.</PageHeader.Description>
       </PageHeader.Root>
-      <ProjectList projects={projects} parts={parts} notes={notes} uses={uses} />
       {parts.length ? (
-        <Stack gap="small" align="stretch">
-          {projects.length > 0 && (
-            <Heading level={2} size={5}>
-              Parts
-            </Heading>
-          )}
-          <PartList parts={parts} />
-        </Stack>
-      ) : projects.length ? null : (
+        <PartList parts={parts} />
+      ) : (
         <EmptyState.Root>
           <EmptyState.Illustration>
             <ViewInArIcon size={48} />
