@@ -5,6 +5,15 @@ body {
   color: var(--semantic-color-text-primary);
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--semantic-dimension-space-gap-small);
+  color: inherit;
+  font-size: 1.25rem;
+  text-decoration: none;
+}
+
 html[data-color-scheme='dark'] .brand-mark {
   filter: invert(1);
 }

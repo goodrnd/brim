@@ -47,6 +47,7 @@ import {
   EditIcon,
   FolderOpenIcon,
   HelpIcon,
+  HomeIcon,
   LayersIcon,
   LightModeIcon,
   PrintIcon,
@@ -255,7 +256,7 @@ export function App() {
   const [projects, setProjects] = useStored<Array<Project>>('brim-projects', () => []);
   const [notes, setNotes] = useStored<Array<Note>>('brim-notes', () => []);
   const route = useRoute();
-  const page = route[0] === 'model' ? 'part' : (route[0] ?? 'library'); // old #/model/ links still open
+  const page = route[0] === 'model' ? 'part' : (route[0] ?? 'home'); // old #/model/ links still open
   const part = page === 'part' ? parts.find((p) => p.id === route[1]) : undefined;
   const project = projects.find((p) => p.id === (page === 'project' || page === 'new' ? route[1] : part?.projectId));
   // shortcut: window.prompt for the name; swap for a Modal like RenameButton if it feels rough.
@@ -286,7 +287,7 @@ export function App() {
     setProjects(r.projects);
     setParts(r.parts);
     setNotes(r.notes);
-    go('');
+    go('library');
   };
   const section = sections.includes(route[2]) ? route[2] : 'design';
   const setSection = (s: string) => part && go(`part/${part.id}/${s}`);
@@ -305,7 +306,7 @@ export function App() {
       return;
     }
     setParts((ps) => ps.filter((p) => p.id !== part.id));
-    go('');
+    go('library');
   };
   const [settings, setSettings] = useStored<SliceSettings>('brim-slice', () => ({
     printer: 'mk4',
@@ -369,16 +370,16 @@ export function App() {
     <>
       <TopNavigation.Root className="header">
         <TopNavigation.Identity>
-          <Stack direction="row" gap="small" align="center">
+          <a href="#/" className="brand">
             <img
               className="brand-mark"
               src={`${import.meta.env.BASE_URL}brim-mark.png`}
-              width={24}
-              height={24}
+              width={32}
+              height={32}
               alt=""
             />
-            <Text render={<strong />}>Brim</Text>
-          </Stack>
+            <strong>Brim</strong>
+          </a>
         </TopNavigation.Identity>
         <TopNavigation.Actions>
           <SegmentedControl.Root
@@ -438,6 +439,7 @@ export function App() {
                   <SideNavigation.List>
                     {(
                       [
+                        ['home', 'Home', HomeIcon],
                         ['library', 'Library', FolderOpenIcon],
                         [
                           'queue',
@@ -449,7 +451,7 @@ export function App() {
                     ).map(([v, label, Icon]) => (
                       <SideNavigation.Item key={v}>
                         <SideNavigation.Link
-                          href={`#/${v === 'library' ? '' : v}`}
+                          href={`#/${v === 'home' ? '' : v}`}
                           iconStart={<Icon />}
                           active={
                             page === v || (v === 'library' && (page === 'part' || page === 'new' || page === 'project'))
@@ -532,7 +534,7 @@ export function App() {
                     <EmptyState.Title level={1}>Project not found</EmptyState.Title>
                   </EmptyState.Copy>
                   <EmptyState.Actions>
-                    <Button onClick={() => go('')}>Back to Library</Button>
+                    <Button onClick={() => go('library')}>Back to Library</Button>
                   </EmptyState.Actions>
                 </EmptyState.Body>
               </EmptyState.Root>
@@ -565,10 +567,12 @@ export function App() {
                     </EmptyState.Description>
                   </EmptyState.Copy>
                   <EmptyState.Actions>
-                    <Button onClick={() => go('')}>Back to Library</Button>
+                    <Button onClick={() => go('library')}>Back to Library</Button>
                   </EmptyState.Actions>
                 </EmptyState.Body>
               </EmptyState.Root>
+            ) : page === 'home' ? (
+              <Home parts={parts} projects={projects} jobs={jobs} onSubmit={generate} />
             ) : (
               <Library
                 parts={parts}
@@ -733,6 +737,67 @@ export function App() {
         </main>
       </div>
     </>
+  );
+}
+
+function Home({
+  parts,
+  projects,
+  jobs,
+  onSubmit,
+}: {
+  parts: Array<Part>;
+  projects: Array<Project>;
+  jobs: Array<Job>;
+  onSubmit: (prompt: string) => Promise<void>;
+}) {
+  const queued = jobs.filter((j) => !j.done);
+  const recent = [...parts].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0)).slice(0, 4);
+  return (
+    <Stack gap="xLarge" align="stretch">
+      <PageHeader.Root>
+        <PageHeader.Row>
+          <PageHeader.Title level={1}>Home</PageHeader.Title>
+        </PageHeader.Row>
+        <PageHeader.Description>Describe a part to start, or pick up where you left off.</PageHeader.Description>
+      </PageHeader.Root>
+      <div className="editor">
+        <PromptBox
+          label="New part"
+          placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
+          action="Generate part"
+          icon={<AutoFixHighIcon />}
+          chips={examples}
+          onSubmit={onSubmit}
+        />
+      </div>
+      <Grid.Root>
+        <Grid.Item span={{base: 6, medium: 3}}>
+          <Card label="Parts" value={parts.length} description={count(projects.length, 'project')} />
+        </Grid.Item>
+        <Grid.Item span={{base: 6, medium: 3}}>
+          <Card label="Queued prints" value={queued.length} description={`${jobs.length - queued.length} printed`} />
+        </Grid.Item>
+        <Grid.Item span={{base: 6, medium: 3}}>
+          <Card label="Queue time" value={hms(queued.reduce((a, j) => a + j.seconds, 0))} description="Estimated" />
+        </Grid.Item>
+        <Grid.Item span={{base: 6, medium: 3}}>
+          <Card
+            label="Queued filament"
+            value={`${queued.reduce((a, j) => a + j.grams, 0).toFixed(0)} g`}
+            description="Still to print"
+          />
+        </Grid.Item>
+      </Grid.Root>
+      {recent.length > 0 && (
+        <Stack gap="small" align="stretch">
+          <Heading level={2} size={5}>
+            Recent parts · <a href="#/library">View library</a>
+          </Heading>
+          <PartList parts={recent} />
+        </Stack>
+      )}
+    </Stack>
   );
 }
 
