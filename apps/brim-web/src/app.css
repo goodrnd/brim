@@ -156,3 +156,13 @@ html[data-borders='off'] .sidebar {
 textarea.mono {
   font-family: ui-monospace, monospace;
 }
+
+.login {
+  display: grid;
+  place-items: center;
+  min-block-size: 100dvh;
+  padding: var(--semantic-dimension-space-padding-large);
+}
+.login-card {
+  inline-size: min(100%, 24rem);
+}

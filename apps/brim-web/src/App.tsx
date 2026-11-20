@@ -39,6 +39,7 @@ import type {Current, Intent} from './intent.ts';
 import {materials as stockMaterials, printers as stockPrinters, slice, type Material, type Printer, type SliceResult, type SliceSettings} from './slicer.ts';
 import {hms, Jobs, type Job} from './Jobs.tsx';
 import {Settings} from './Settings.tsx';
+import {AccountSettings, demoAccount, Login, type Account} from './Account.tsx';
 import {go, useRoute} from './route.ts';
 import {useStored} from './store.ts';
 import {parseStl, Viewer} from './Viewer.tsx';
@@ -156,6 +157,8 @@ const slug = (m: Model) => (m.type === 'mesh' ? m.name : m.spec.kind + '-' + Mat
 export function App() {
   const {theme, setTheme, scheme, setScheme, applied} = useTheme();
   const [borders, setBorders] = useBorders();
+  const [account, setAccount] = useStored<Account>('brim-account', () => demoAccount);
+  const [signedIn, setSignedIn] = useStored('brim-session', () => false);
   const [projects, setProjects] = useStored<Project[]>('brim-models', () => [], storable);
   const [jobs, setJobs] = useStored<Job[]>('brim-jobs', () => []);
   const [printers, setPrinters] = useStored<Record<string, Printer>>('brim-printers', () => stockPrinters);
@@ -212,6 +215,8 @@ export function App() {
       alert((e as Error).message);
     }
   };
+
+  if (!signedIn) return <Login account={account} onLogin={() => setSignedIn(true)} />;
 
   return (
     <>
@@ -279,6 +284,9 @@ export function App() {
                     <SideNavigation.Item>
                       <SideNavigation.Link href={`#/settings/printer/${sliceSettings.printer}`} iconStart={<I.PrintIcon />}>{printer.name}</SideNavigation.Link>
                     </SideNavigation.Item>
+                    <SideNavigation.Item>
+                      <SideNavigation.Link href="#/account" iconStart={<I.AccountCircleIcon />} active={page === 'account'}>{account.name}</SideNavigation.Link>
+                    </SideNavigation.Item>
                   </SideNavigation.List>
                 </SideNavigation.Root>
               </Sidebar.Footer>
@@ -291,6 +299,8 @@ export function App() {
             <NewModel onSubmit={generate} />
           ) : page === 'queue' ? (
             <Jobs jobs={jobs} setJobs={setJobs} onOpen={(id) => projects.some((p) => p.id === id) && go(`model/${id}/print`)} />
+          ) : page === 'account' ? (
+            <AccountSettings account={account} setAccount={setAccount} onLogout={() => (setSignedIn(false), go(''))} />
           ) : page === 'settings' ? (
             <Settings printers={printers} setPrinters={setPrinters} materials={materials} setMaterials={setMaterials} inUse={sliceSettings} route={route.slice(1)} />
           ) : !project || !current ? (
