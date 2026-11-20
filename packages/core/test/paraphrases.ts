@@ -1,5 +1,5 @@
 // M1 exit test set: each paraphrase must resolve to the same Spec as its README prompt does through the regex parser.
-export const paraphrases: Record<string, string[]> = {
+export const paraphrases = {
   'twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs': [
     'a vase, 12 cm high and 7 cm across, twisted, with 12 ribs and 2 mm walls',
     'make me a twisted vase: height 120mm, diameter 70mm, wall thickness 2mm, 12 ribs',
@@ -27,4 +27,4 @@ export const paraphrases: Record<string, string[]> = {
     'Could you make a box that is 80mm long, 50mm deep and 30mm high with 2mm walls and 6mm rounded corners?',
     'box, 80 by 50, 30 high, 2 mm walls, corner radius 6 mm',
   ],
-};
+} satisfies Record<string, Array<string>>;

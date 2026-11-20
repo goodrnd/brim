@@ -1,620 +1,616 @@
 {
- "model": "opencode-go/deepseek-v4.1-flash",
- "cases": [
-  {
-   "prompt": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
-   "content": [
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "cases": [
     {
-     "type": "toolCall",
-     "id": "call_9b3eb5d38c344b3db03b8707",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "vase",
-      "width": 70,
-      "height": 120,
-      "wall": 2,
-      "ribs": 12,
-      "twist": 90
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "prompt": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
-   "content": [
+      "prompt": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_9b3eb5d38c344b3db03b8707",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "vase",
+            "width": 70,
+            "height": 120,
+            "wall": 2,
+            "ribs": 12,
+            "twist": 90
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_849e64c7823b44328cf1318c",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "gear",
-      "width": 50,
-      "height": 6,
-      "hole": 5,
-      "teeth": 24
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "prompt": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
-   "content": [
+      "prompt": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_849e64c7823b44328cf1318c",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "gear",
+            "width": 50,
+            "height": 6,
+            "hole": 5,
+            "teeth": 24
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_a33d43d8a3614439b8c54c4e",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "box",
-      "width": 80,
-      "depth": 50,
-      "height": 30,
-      "wall": 2,
-      "corner": 6
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "prompt": "make it taller",
-   "current": {
-    "type": "param",
-    "spec": {
-     "kind": "vase",
-     "width": 70,
-     "depth": 70,
-     "height": 120,
-     "wall": 2,
-     "hole": 0,
-     "teeth": 20,
-     "points": 5,
-     "ribs": 12,
-     "twist": 90,
-     "taper": 0.8,
-     "corner": 0,
-     "segments": 96
-    }
-   },
-   "content": [
+      "prompt": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_a33d43d8a3614439b8c54c4e",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "box",
+            "width": 80,
+            "depth": 50,
+            "height": 30,
+            "wall": 2,
+            "corner": 6
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_caab9efd78ba4bfe8d9553d2",
-     "name": "edit",
-     "arguments": {
-      "ops": [
-       {
-        "op": "set",
-        "field": "height",
-        "value": 150
-       }
-      ]
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "prompt": "thicker walls",
-   "current": {
-    "type": "param",
-    "spec": {
-     "kind": "vase",
-     "width": 70,
-     "depth": 70,
-     "height": 120,
-     "wall": 2,
-     "hole": 0,
-     "teeth": 20,
-     "points": 5,
-     "ribs": 12,
-     "twist": 90,
-     "taper": 0.8,
-     "corner": 0,
-     "segments": 96
-    }
-   },
-   "content": [
+      "prompt": "make it taller",
+      "current": {
+        "type": "param",
+        "spec": {
+          "kind": "vase",
+          "width": 70,
+          "depth": 70,
+          "height": 120,
+          "wall": 2,
+          "hole": 0,
+          "teeth": 20,
+          "points": 5,
+          "ribs": 12,
+          "twist": 90,
+          "taper": 0.8,
+          "corner": 0,
+          "segments": 96
+        }
+      },
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_caab9efd78ba4bfe8d9553d2",
+          "name": "edit",
+          "arguments": {
+            "ops": [
+              {
+                "op": "set",
+                "field": "height",
+                "value": 150
+              }
+            ]
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_0177f27d52364feca3eb110a",
-     "name": "edit",
-     "arguments": {
-      "ops": [
-       {
-        "op": "set",
-        "field": "wall",
-        "value": 3
-       }
-      ]
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "prompt": "scale to 80%",
-   "current": {
-    "type": "param",
-    "spec": {
-     "kind": "vase",
-     "width": 70,
-     "depth": 70,
-     "height": 120,
-     "wall": 2,
-     "hole": 0,
-     "teeth": 20,
-     "points": 5,
-     "ribs": 12,
-     "twist": 90,
-     "taper": 0.8,
-     "corner": 0,
-     "segments": 96
-    }
-   },
-   "content": [
+      "prompt": "thicker walls",
+      "current": {
+        "type": "param",
+        "spec": {
+          "kind": "vase",
+          "width": 70,
+          "depth": 70,
+          "height": 120,
+          "wall": 2,
+          "hole": 0,
+          "teeth": 20,
+          "points": 5,
+          "ribs": 12,
+          "twist": 90,
+          "taper": 0.8,
+          "corner": 0,
+          "segments": 96
+        }
+      },
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_0177f27d52364feca3eb110a",
+          "name": "edit",
+          "arguments": {
+            "ops": [
+              {
+                "op": "set",
+                "field": "wall",
+                "value": 3
+              }
+            ]
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_0dc54dc8ac484b26829ac0f0",
-     "name": "edit",
-     "arguments": {
-      "ops": [
-       {
-        "op": "scale",
-        "x": 0.8,
-        "y": 0.8,
-        "z": 0.8
-       }
-      ]
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "prompt": "flip it upside down",
-   "current": {
-    "type": "mesh",
-    "name": "benchy",
-    "size": [
-     60,
-     31,
-     48
-    ]
-   },
-   "content": [
+      "prompt": "scale to 80%",
+      "current": {
+        "type": "param",
+        "spec": {
+          "kind": "vase",
+          "width": 70,
+          "depth": 70,
+          "height": 120,
+          "wall": 2,
+          "hole": 0,
+          "teeth": 20,
+          "points": 5,
+          "ribs": 12,
+          "twist": 90,
+          "taper": 0.8,
+          "corner": 0,
+          "segments": 96
+        }
+      },
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_0dc54dc8ac484b26829ac0f0",
+          "name": "edit",
+          "arguments": {
+            "ops": [
+              {
+                "op": "scale",
+                "x": 0.8,
+                "y": 0.8,
+                "z": 0.8
+              }
+            ]
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_1b1a7936c5cf444baac33619",
-     "name": "edit",
-     "arguments": {
-      "ops": [
-       {
-        "op": "rotate",
-        "axis": "x",
-        "degrees": 180
-       }
-      ]
-     }
+      "prompt": "flip it upside down",
+      "current": {
+        "type": "mesh",
+        "name": "benchy",
+        "size": [60, 31, 48]
+      },
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_1b1a7936c5cf444baac33619",
+          "name": "edit",
+          "arguments": {
+            "ops": [
+              {
+                "op": "rotate",
+                "axis": "x",
+                "degrees": 180
+              }
+            ]
+          }
+        }
+      ],
+      "stopReason": "toolUse"
     }
-   ],
-   "stopReason": "toolUse"
-  }
- ],
- "paraphrases": [
-  {
-   "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
-   "prompt": "a vase, 12 cm high and 7 cm across, twisted, with 12 ribs and 2 mm walls",
-   "content": [
+  ],
+  "paraphrases": [
     {
-     "type": "toolCall",
-     "id": "call_a7de7d8e9c4349cda97ae879",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "vase",
-      "width": 70,
-      "height": 120,
-      "wall": 2,
-      "ribs": 12,
-      "twist": 90
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
-   "prompt": "make me a twisted vase: height 120mm, diameter 70mm, wall thickness 2mm, 12 ribs",
-   "content": [
+      "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
+      "prompt": "a vase, 12 cm high and 7 cm across, twisted, with 12 ribs and 2 mm walls",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_a7de7d8e9c4349cda97ae879",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "vase",
+            "width": 70,
+            "height": 120,
+            "wall": 2,
+            "ribs": 12,
+            "twist": 90
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_0777f1c7205a49c28748dd85",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "vase",
-      "height": 120,
-      "width": 70,
-      "wall": 2,
-      "ribs": 12,
-      "twist": 90
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
-   "prompt": "I want a vase that is 70 mm wide and 120 mm tall with a twist, twelve ribs and walls 2mm thick",
-   "content": [
+      "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
+      "prompt": "make me a twisted vase: height 120mm, diameter 70mm, wall thickness 2mm, 12 ribs",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_0777f1c7205a49c28748dd85",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "vase",
+            "height": 120,
+            "width": 70,
+            "wall": 2,
+            "ribs": 12,
+            "twist": 90
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_06d948f4fd0246439c5064b9",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "vase",
-      "width": 70,
-      "height": 120,
-      "wall": 2,
-      "ribs": 12,
-      "twist": 90
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
-   "prompt": "vase, twisted, ribbed with 12 ribs, 120mm tall by 70mm wide, 2 millimetre walls",
-   "content": [
+      "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
+      "prompt": "I want a vase that is 70 mm wide and 120 mm tall with a twist, twelve ribs and walls 2mm thick",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_06d948f4fd0246439c5064b9",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "vase",
+            "width": 70,
+            "height": 120,
+            "wall": 2,
+            "ribs": 12,
+            "twist": 90
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_95a09f63e3d240d49b1ea02b",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "vase",
-      "width": 70,
-      "height": 120,
-      "wall": 2,
-      "ribs": 12,
-      "twist": 90
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
-   "prompt": "Could you design a 120 mm tall vase, 70 mm in diameter, twisted, 12 ribs, 2 mm thick walls?",
-   "content": [
+      "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
+      "prompt": "vase, twisted, ribbed with 12 ribs, 120mm tall by 70mm wide, 2 millimetre walls",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_95a09f63e3d240d49b1ea02b",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "vase",
+            "width": 70,
+            "height": 120,
+            "wall": 2,
+            "ribs": 12,
+            "twist": 90
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_f18d1332a82e4aa0a6faea41",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "vase",
-      "width": 70,
-      "height": 120,
-      "wall": 2,
-      "ribs": 12,
-      "twist": 90
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
-   "prompt": "twisty vase 12cm tall 7cm wide, walls 2mm, 12 ribs",
-   "content": [
+      "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
+      "prompt": "Could you design a 120 mm tall vase, 70 mm in diameter, twisted, 12 ribs, 2 mm thick walls?",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_f18d1332a82e4aa0a6faea41",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "vase",
+            "width": 70,
+            "height": 120,
+            "wall": 2,
+            "ribs": 12,
+            "twist": 90
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_254f42f7ae544c8db4f91290",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "vase",
-      "width": 70,
-      "height": 120,
-      "wall": 2,
-      "ribs": 12,
-      "twist": 90
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
-   "prompt": "create a twisted flower vase with 12 ribs; 70 wide, 120 high, 2mm wall",
-   "content": [
+      "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
+      "prompt": "twisty vase 12cm tall 7cm wide, walls 2mm, 12 ribs",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_254f42f7ae544c8db4f91290",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "vase",
+            "width": 70,
+            "height": 120,
+            "wall": 2,
+            "ribs": 12,
+            "twist": 90
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_c72f442318974f9bb489f6e7",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "vase",
-      "width": 70,
-      "height": 120,
-      "wall": 2,
-      "ribs": 12,
-      "twist": 90
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
-   "prompt": "a 24-tooth gear, 50 mm across, 6 mm thick, with a 5 mm hole",
-   "content": [
+      "canonical": "twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs",
+      "prompt": "create a twisted flower vase with 12 ribs; 70 wide, 120 high, 2mm wall",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_c72f442318974f9bb489f6e7",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "vase",
+            "width": 70,
+            "height": 120,
+            "wall": 2,
+            "ribs": 12,
+            "twist": 90
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_758b56c2bb164cd7b7b1baa9",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "gear",
-      "width": 50,
-      "height": 6,
-      "hole": 5,
-      "teeth": 24
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
-   "prompt": "cog with twenty-four teeth, diameter 5 cm, thickness 6mm, 5mm bore",
-   "content": [
+      "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
+      "prompt": "a 24-tooth gear, 50 mm across, 6 mm thick, with a 5 mm hole",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_758b56c2bb164cd7b7b1baa9",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "gear",
+            "width": 50,
+            "height": 6,
+            "hole": 5,
+            "teeth": 24
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_254cc30fb48d4232b2fe3045",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "gear",
-      "width": 50,
-      "height": 6,
-      "teeth": 24,
-      "hole": 5
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
-   "prompt": "make a gear: 50mm diameter, 24 teeth, 6mm thick, 5mm shaft hole",
-   "content": [
+      "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
+      "prompt": "cog with twenty-four teeth, diameter 5 cm, thickness 6mm, 5mm bore",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_254cc30fb48d4232b2fe3045",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "gear",
+            "width": 50,
+            "height": 6,
+            "teeth": 24,
+            "hole": 5
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_6ff33843449144aca5e174f1",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "gear",
-      "width": 50,
-      "teeth": 24,
-      "height": 6,
-      "hole": 5
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
-   "prompt": "I need a gear that is 6 mm thick and 50 mm wide with 24 teeth and a 5 mm center hole",
-   "content": [
+      "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
+      "prompt": "make a gear: 50mm diameter, 24 teeth, 6mm thick, 5mm shaft hole",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_6ff33843449144aca5e174f1",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "gear",
+            "width": 50,
+            "teeth": 24,
+            "height": 6,
+            "hole": 5
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_e196d78cb66342b6a94fe604",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "gear",
-      "width": 50,
-      "height": 6,
-      "teeth": 24,
-      "hole": 5
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
-   "prompt": "spur gear, 24 teeth, Ø50, 6mm thick, 5mm hole in the middle",
-   "content": [
+      "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
+      "prompt": "I need a gear that is 6 mm thick and 50 mm wide with 24 teeth and a 5 mm center hole",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_e196d78cb66342b6a94fe604",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "gear",
+            "width": 50,
+            "height": 6,
+            "teeth": 24,
+            "hole": 5
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_b684ea77cebc43c68615c42d",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "gear",
-      "width": 50,
-      "teeth": 24,
-      "height": 6,
-      "hole": 5
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
-   "prompt": "gear 50mm diameter 6mm thickness 24 teeth with a 5 mm hole",
-   "content": [
+      "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
+      "prompt": "spur gear, 24 teeth, Ø50, 6mm thick, 5mm hole in the middle",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_b684ea77cebc43c68615c42d",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "gear",
+            "width": 50,
+            "teeth": 24,
+            "height": 6,
+            "hole": 5
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_ccfec590674e4c879c16a584",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "gear",
-      "width": 50,
-      "height": 6,
-      "teeth": 24,
-      "hole": 5
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
-   "prompt": "design a cog: 24 teeth, 50 millimetres in diameter, 6 mm thick, hole of 5 mm",
-   "content": [
+      "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
+      "prompt": "gear 50mm diameter 6mm thickness 24 teeth with a 5 mm hole",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_ccfec590674e4c879c16a584",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "gear",
+            "width": 50,
+            "height": 6,
+            "teeth": 24,
+            "hole": 5
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_a76d1e06e850419d81004201",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "gear",
-      "width": 50,
-      "teeth": 24,
-      "height": 6,
-      "hole": 5
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
-   "prompt": "a box 80 wide, 50 deep and 30 tall, 2mm walls, 6mm rounded corners",
-   "content": [
+      "canonical": "gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole",
+      "prompt": "design a cog: 24 teeth, 50 millimetres in diameter, 6 mm thick, hole of 5 mm",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_a76d1e06e850419d81004201",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "gear",
+            "width": 50,
+            "teeth": 24,
+            "height": 6,
+            "hole": 5
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_402264d6e8e345ac85cebe7a",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "box",
-      "width": 80,
-      "depth": 50,
-      "height": 30,
-      "wall": 2,
-      "corner": 6
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
-   "prompt": "container measuring 80 by 50 by 30 mm with 2 mm walls and 6 mm corner radius",
-   "content": [
+      "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
+      "prompt": "a box 80 wide, 50 deep and 30 tall, 2mm walls, 6mm rounded corners",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_402264d6e8e345ac85cebe7a",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "box",
+            "width": 80,
+            "depth": 50,
+            "height": 30,
+            "wall": 2,
+            "corner": 6
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_3a03a9384add43e6a9fd77b3",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "box",
-      "width": 80,
-      "depth": 50,
-      "height": 30,
-      "wall": 2,
-      "corner": 6
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
-   "prompt": "make a box: width 80mm, depth 50mm, height 30mm, walls 2mm, corners 6mm",
-   "content": [
+      "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
+      "prompt": "container measuring 80 by 50 by 30 mm with 2 mm walls and 6 mm corner radius",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_3a03a9384add43e6a9fd77b3",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "box",
+            "width": 80,
+            "depth": 50,
+            "height": 30,
+            "wall": 2,
+            "corner": 6
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_8b72a0541eb24f4bad7ed430",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "box",
-      "width": 80,
-      "depth": 50,
-      "height": 30,
-      "wall": 2,
-      "corner": 6
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
-   "prompt": "I want an 8 x 5 x 3 cm box with 2mm thick walls and 6mm corners",
-   "content": [
+      "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
+      "prompt": "make a box: width 80mm, depth 50mm, height 30mm, walls 2mm, corners 6mm",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_8b72a0541eb24f4bad7ed430",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "box",
+            "width": 80,
+            "depth": 50,
+            "height": 30,
+            "wall": 2,
+            "corner": 6
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_02d5ebe082f44c538ba4dc3d",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "box",
-      "width": 80,
-      "depth": 50,
-      "height": 30,
-      "wall": 2,
-      "corner": 6
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
-   "prompt": "tray 80x50x30mm, wall thickness 2 mm, 6 mm corners",
-   "content": [
+      "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
+      "prompt": "I want an 8 x 5 x 3 cm box with 2mm thick walls and 6mm corners",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_02d5ebe082f44c538ba4dc3d",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "box",
+            "width": 80,
+            "depth": 50,
+            "height": 30,
+            "wall": 2,
+            "corner": 6
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_fefdac8884a44f7c882819d1",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "box",
-      "width": 80,
-      "depth": 50,
-      "height": 30,
-      "wall": 2,
-      "corner": 6
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
-   "prompt": "Could you make a box that is 80mm long, 50mm deep and 30mm high with 2mm walls and 6mm rounded corners?",
-   "content": [
+      "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
+      "prompt": "tray 80x50x30mm, wall thickness 2 mm, 6 mm corners",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_fefdac8884a44f7c882819d1",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "box",
+            "width": 80,
+            "depth": 50,
+            "height": 30,
+            "wall": 2,
+            "corner": 6
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_82983733b6b24627a5ed4124",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "box",
-      "width": 80,
-      "depth": 50,
-      "height": 30,
-      "wall": 2,
-      "corner": 6
-     }
-    }
-   ],
-   "stopReason": "toolUse"
-  },
-  {
-   "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
-   "prompt": "box, 80 by 50, 30 high, 2 mm walls, corner radius 6 mm",
-   "content": [
+      "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
+      "prompt": "Could you make a box that is 80mm long, 50mm deep and 30mm high with 2mm walls and 6mm rounded corners?",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_82983733b6b24627a5ed4124",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "box",
+            "width": 80,
+            "depth": 50,
+            "height": 30,
+            "wall": 2,
+            "corner": 6
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    },
     {
-     "type": "toolCall",
-     "id": "call_8426178826284f5b8552e73e",
-     "name": "new_shape",
-     "arguments": {
-      "kind": "box",
-      "width": 80,
-      "depth": 50,
-      "height": 30,
-      "wall": 2,
-      "corner": 6
-     }
+      "canonical": "box 80 x 50 x 30 with 2mm walls and 6mm corners",
+      "prompt": "box, 80 by 50, 30 high, 2 mm walls, corner radius 6 mm",
+      "content": [
+        {
+          "type": "toolCall",
+          "id": "call_8426178826284f5b8552e73e",
+          "name": "new_shape",
+          "arguments": {
+            "kind": "box",
+            "width": 80,
+            "depth": 50,
+            "height": 30,
+            "wall": 2,
+            "corner": 6
+          }
+        }
+      ],
+      "stopReason": "toolUse"
     }
-   ],
-   "stopReason": "toolUse"
-  }
- ]
+  ]
 }

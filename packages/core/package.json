@@ -2,7 +2,9 @@
   "name": "@brim/core",
   "private": true,
   "type": "module",
-  "exports": {"./*": "./src/*"},
+  "exports": {
+    "./*": "./src/*"
+  },
   "scripts": {
     "test": "node --test test/*.test.ts",
     "record": "node test/record.ts"
