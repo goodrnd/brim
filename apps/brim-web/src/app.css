@@ -147,3 +147,12 @@ html[data-borders='off'] .header,
 html[data-borders='off'] .sidebar {
   border-color: transparent;
 }
+
+.editor {
+  max-inline-size: 40rem;
+}
+
+.mono textarea,
+textarea.mono {
+  font-family: ui-monospace, monospace;
+}

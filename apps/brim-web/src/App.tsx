@@ -22,7 +22,6 @@ import {
   SideNavigation,
   Sidebar,
   Stack,
-  Table,
   Tabs,
   Text,
   TextArea,
@@ -40,6 +39,7 @@ import type {Current, Intent} from './intent.ts';
 import {materials as stockMaterials, printers as stockPrinters, slice, type Material, type Printer, type SliceResult, type SliceSettings} from './slicer.ts';
 import {hms, Jobs, type Job} from './Jobs.tsx';
 import {Settings} from './Settings.tsx';
+import {go, useRoute} from './route.ts';
 import {useStored} from './store.ts';
 import {parseStl, Viewer} from './Viewer.tsx';
 
@@ -63,12 +63,10 @@ interface Project {
   name?: string;
   thumb?: string; // webp data URL of the viewer
   history: Entry[];
+  edited?: number; // ms timestamp of the last design change or rename
 }
 
-const newProject = (prompt = examples[0]): Project => {
-  const {spec, changes} = parsePrompt(prompt);
-  return {id: crypto.randomUUID(), history: [{prompt, changes, model: {type: 'param', spec}}]};
-};
+const sections = ['design', 'refine', 'print'];
 const modelTitle = (m: Model) => (m.type === 'mesh' ? m.name : 'Untitled ' + m.spec.kind);
 const title = (p: Project) => p.name || modelTitle(p.history[p.history.length - 1].model);
 
@@ -158,28 +156,28 @@ const slug = (m: Model) => (m.type === 'mesh' ? m.name : m.spec.kind + '-' + Mat
 export function App() {
   const {theme, setTheme, scheme, setScheme, applied} = useTheme();
   const [borders, setBorders] = useBorders();
-  const [projects, setProjects] = useStored('brim-models', () => [newProject()], storable);
+  const [projects, setProjects] = useStored<Project[]>('brim-models', () => [], storable);
   const [jobs, setJobs] = useStored<Job[]>('brim-jobs', () => []);
   const [printers, setPrinters] = useStored<Record<string, Printer>>('brim-printers', () => stockPrinters);
   const [materials, setMaterials] = useStored<Record<string, Material>>('brim-materials', () => stockMaterials);
-  const [openId, setOpenId] = useState(() => projects[0].id);
-  const [tab, setTab] = useState('models');
-  const project = projects.find((p) => p.id === openId) ?? projects[0];
-  const history = project.history;
+  const route = useRoute();
+  const page = route[0] ?? 'library';
+  const project = page === 'model' ? projects.find((p) => p.id === route[1]) : undefined;
+  const section = sections.includes(route[2]) ? route[2] : 'design';
+  const setSection = (s: string) => project && go(`model/${project.id}/${s}`);
   const patch = (id: string, f: (p: Project) => Project) => setProjects((ps) => ps.map((p) => (p.id === id ? f(p) : p)));
-  const setHistory = (f: (h: Entry[]) => Entry[]) => patch(project.id, (p) => ({...p, history: f(p.history)}));
-  const open = (id: string, t: string) => (setOpenId(id), setTab(t));
-  const create = (p?: Project) => {
-    const next = p ?? newProject();
+  const edit = (f: (p: Project) => Project) => project && patch(project.id, (p) => ({...f(p), edited: Date.now()}));
+  const setHistory = (f: (h: Entry[]) => Entry[]) => edit((p) => ({...p, history: f(p.history)}));
+  const create = (p: Omit<Project, 'id' | 'edited'>) => {
+    const next = {...p, id: crypto.randomUUID(), edited: Date.now()};
     setProjects((ps) => [next, ...ps]);
-    open(next.id, p ? 'refine' : 'design');
+    go(`model/${next.id}/refine`);
   };
-  const duplicate = () => create({...project, id: crypto.randomUUID(), name: title(project) + ' copy'});
+  const duplicate = () => project && create({...project, name: title(project) + ' copy'});
   const remove = () => {
-    if (!confirm(`Delete “${title(project)}”? This cannot be undone.`)) return;
-    const rest = projects.filter((p) => p.id !== project.id);
-    setProjects(rest);
-    open(rest[0].id, 'models');
+    if (!project || !confirm(`Delete “${title(project)}”? This cannot be undone.`)) return;
+    setProjects((ps) => ps.filter((p) => p.id !== project.id));
+    go('');
   };
   const [settings, setSettings] = useStored<SliceSettings>('brim-slice', () => ({printer: 'mk4', material: 'pla', layer: 0.2, infill: 15, speed: 60, vase: false}));
   // Fall back when the chosen printer or material was deleted or reset away.
@@ -188,19 +186,20 @@ export function App() {
     printer: printers[settings.printer] ? settings.printer : Object.keys(printers)[0],
     material: materials[settings.material] ? settings.material : Object.keys(materials)[0],
   };
-  const current = history[history.length - 1];
+  const current = project?.history[project.history.length - 1];
   const positions = useMemo(
-    () => (current.model.type === 'param' ? buildPositions(current.model.spec) : current.model.positions),
+    () => (!current ? new Float32Array() : current.model.type === 'param' ? buildPositions(current.model.spec) : current.model.positions),
     [current],
   );
   const printer = printers[sliceSettings.printer];
 
   const generate = async (prompt: string) => {
     const e = await resolve(prompt);
-    setHistory((h) => [...h, e]);
+    if (project) setHistory((h) => [...h, e]);
+    else create({history: [e]});
   };
   const refine = async (prompt: string) => {
-    const e = await resolve(prompt, current.model);
+    const e = await resolve(prompt, current?.model);
     setHistory((h) => [...h, e]);
   };
   const upload = async (file: File) => {
@@ -208,7 +207,7 @@ export function App() {
       const p = parseStl(await file.arrayBuffer());
       const {positions: fixed} = editMesh('', p);
       const entry: Entry = {prompt: `Imported ${file.name}`, changes: [`${fixed.length / 9} triangles`], model: {type: 'mesh', name: file.name.replace(/\.stl$/i, ''), positions: fixed}};
-      create({id: crypto.randomUUID(), history: [entry]});
+      create({history: [entry]});
     } catch (e) {
       alert((e as Error).message);
     }
@@ -266,9 +265,9 @@ export function App() {
               <Sidebar.Content>
                 <SideNavigation.Root aria-label="Workflow" variant={collapsed ? 'compact' : 'default'}>
                   <SideNavigation.List>
-                    {([['models', 'Models', <I.FolderOpenIcon />], ['queue', `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`, <I.ScheduleIcon />], ['settings', 'Printers & materials', <I.SettingsIcon />]] as const).map(([v, label, icon]) => (
+                    {([['library', 'Library', <I.FolderOpenIcon />], ['queue', `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`, <I.ScheduleIcon />], ['settings', 'Printers & materials', <I.SettingsIcon />]] as const).map(([v, label, icon]) => (
                       <SideNavigation.Item key={v}>
-                        <SideNavigation.Link href="#" iconStart={icon} active={tab === v || (v === 'models' && ['design', 'refine', 'print'].includes(tab))} onClick={(e) => (e.preventDefault(), setTab(v))}>{label}</SideNavigation.Link>
+                        <SideNavigation.Link href={`#/${v === 'library' ? '' : v}`} iconStart={icon} active={page === v || (v === 'library' && (page === 'model' || page === 'new'))}>{label}</SideNavigation.Link>
                       </SideNavigation.Item>
                     ))}
                   </SideNavigation.List>
@@ -278,7 +277,7 @@ export function App() {
                 <SideNavigation.Root aria-label="Printer" variant={collapsed ? 'compact' : 'default'}>
                   <SideNavigation.List>
                     <SideNavigation.Item>
-                      <SideNavigation.Link href="#" iconStart={<I.PrintIcon />} onClick={(e) => (e.preventDefault(), setTab('print'))}>{printer.name}</SideNavigation.Link>
+                      <SideNavigation.Link href={`#/settings/printer/${sliceSettings.printer}`} iconStart={<I.PrintIcon />}>{printer.name}</SideNavigation.Link>
                     </SideNavigation.Item>
                   </SideNavigation.List>
                 </SideNavigation.Root>
@@ -288,23 +287,37 @@ export function App() {
         </Sidebar.Root>
 
         <main className="main">
-          {tab === 'models' ? (
-            <Library projects={projects} onOpen={open} onNew={() => create()} onUpload={upload} />
-          ) : tab === 'queue' ? (
-            <Jobs jobs={jobs} setJobs={setJobs} onOpen={(id) => projects.some((p) => p.id === id) && open(id, 'print')} />
-          ) : tab === 'settings' ? (
-            <Settings printers={printers} setPrinters={setPrinters} materials={materials} setMaterials={setMaterials} inUse={sliceSettings} />
+          {page === 'new' ? (
+            <NewModel onSubmit={generate} />
+          ) : page === 'queue' ? (
+            <Jobs jobs={jobs} setJobs={setJobs} onOpen={(id) => projects.some((p) => p.id === id) && go(`model/${id}/print`)} />
+          ) : page === 'settings' ? (
+            <Settings printers={printers} setPrinters={setPrinters} materials={materials} setMaterials={setMaterials} inUse={sliceSettings} route={route.slice(1)} />
+          ) : !project || !current ? (
+            page === 'model' ? (
+              <EmptyState.Root>
+                <EmptyState.Body>
+                  <EmptyState.Copy>
+                    <EmptyState.Title level={1}>Model not found</EmptyState.Title>
+                    <EmptyState.Description>It may have been deleted, or it was an imported STL from an earlier visit.</EmptyState.Description>
+                  </EmptyState.Copy>
+                  <EmptyState.Actions><Button onClick={() => go('')}>Back to Library</Button></EmptyState.Actions>
+                </EmptyState.Body>
+              </EmptyState.Root>
+            ) : (
+              <Library projects={projects} onUpload={upload} />
+            )
           ) : (
           <Stack gap="xLarge" align="stretch">
             <PageHeader.Root>
               <PageHeader.Row>
                 <PageHeader.Title level={1}>{title(project)}</PageHeader.Title>
                 <PageHeader.Actions>
-                  <RenameButton key={project.id} name={title(project)} onRename={(name) => patch(project.id, (p) => ({...p, name}))} />
+                  <RenameButton key={project.id} name={title(project)} onRename={(name) => edit((p) => ({...p, name}))} />
                   <Button hierarchy="secondary" iconStart={<I.ContentCopyIcon />} onClick={duplicate}>Duplicate</Button>
-                  <Button hierarchy="secondary" iconStart={<I.DeleteIcon />} disabled={projects.length < 2} onClick={remove}>Delete</Button>
+                  <Button hierarchy="secondary" iconStart={<I.DeleteIcon />} onClick={remove}>Delete</Button>
                   <Button hierarchy="secondary" iconStart={<I.DownloadIcon />} onClick={() => download(toStl(positions), slug(current.model) + '.stl', 'model/stl')}>STL</Button>
-                  <Button iconStart={<I.PrintIcon />} onClick={() => setTab('print')}>Prepare print</Button>
+                  <Button iconStart={<I.PrintIcon />} onClick={() => setSection('print')}>Prepare print</Button>
                 </PageHeader.Actions>
               </PageHeader.Row>
               <PageHeader.Description>
@@ -312,7 +325,7 @@ export function App() {
               </PageHeader.Description>
             </PageHeader.Root>
 
-            <Tabs.Root value={tab} onValueChange={(v) => setTab(v as string)}>
+            <Tabs.Root value={section} onValueChange={(v) => setSection(v as string)}>
               <Tabs.List aria-label="Workflow" className="sections">
                 <Tabs.Tab value="design"><I.AutoFixHighIcon />Design</Tabs.Tab>
                 <Tabs.Tab value="refine"><I.TuneIcon />Refine</Tabs.Tab>
@@ -335,7 +348,7 @@ export function App() {
                       action="Generate STL"
                       icon={<I.AutoFixHighIcon />}
                       chips={examples}
-                      onSubmit={(p) => generate(p).then(() => setTab('refine'))}
+                      onSubmit={(p) => generate(p).then(() => setSection('refine'))}
                     />
                   </Tabs.Panel>
                   <Tabs.Panel value="refine" className="panel">
@@ -350,7 +363,7 @@ export function App() {
                         onSubmit={refine}
                       />
                       <History
-                        history={history}
+                        history={project.history}
                         onUndo={() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h))}
                         onRestore={(i) => setHistory((h) => [...h, {...h[i], prompt: `Back to step ${i + 1}`, changes: [h[i].prompt]}])}
                       />
@@ -368,7 +381,7 @@ export function App() {
                       onQueue={(r) => {
                         const s = sliceSettings;
                         setJobs((js) => [{id: crypto.randomUUID(), projectId: project.id, model: title(project), printer: printers[s.printer].name, material: materials[s.material].name, layer: s.layer, infill: s.infill, seconds: r.seconds, grams: r.grams, at: Date.now(), done: false}, ...js]);
-                        setTab('queue');
+                        go('queue');
                       }}
                     />
                   </Tabs.Panel>
@@ -383,44 +396,76 @@ export function App() {
   );
 }
 
-function Library({projects, onOpen, onNew, onUpload}: {projects: Project[]; onOpen: (id: string, tab: string) => void; onNew: () => void; onUpload: (f: File) => void}) {
+const edited = (t?: number) => (t ? 'Edited ' + new Date(t).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'}) : '');
+
+function Library({projects, onUpload}: {projects: Project[]; onUpload: (f: File) => void}) {
+  const sorted = [...projects].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0));
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
         <PageHeader.Row>
-          <PageHeader.Title level={1}>Models</PageHeader.Title>
+          <PageHeader.Title level={1}>Library</PageHeader.Title>
           <PageHeader.Actions>
             <UploadButton onFile={onUpload} />
-            <Button iconStart={<I.AddIcon />} onClick={onNew}>New model</Button>
+            <Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New model</Button>
           </PageHeader.Actions>
         </PageHeader.Row>
         <PageHeader.Description>{projects.length} {projects.length === 1 ? 'model' : 'models'}, saved in this browser.</PageHeader.Description>
       </PageHeader.Root>
-      <ul className="model-list">
-        {projects.map((p) => {
-          const m = p.history[p.history.length - 1].model;
-          return (
-            <li key={p.id}>
-              {/* Image link is a mouse shortcut; the title link is the one keyboard and screen reader users get. */}
-              <a href="#" className="card-link" tabIndex={-1} aria-hidden onClick={(e) => (e.preventDefault(), onOpen(p.id, 'design'))}>
-                {p.thumb ? <img className="thumb" src={p.thumb} alt="" /> : <div className="thumb" />}
-              </a>
-              <Stack gap="xSmall" align="stretch">
-                <Heading level={2} size={5}>
-                  <a href="#" className="card-link" onClick={(e) => (e.preventDefault(), onOpen(p.id, 'design'))}>{title(p)}</a>
-                </Heading>
-                <Text className="muted">{m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved'}</Text>
-                <Text className="muted">{p.history.length} {p.history.length === 1 ? 'step' : 'steps'}</Text>
-              </Stack>
-              <Stack direction="row" gap="xSmall" wrap="wrap">
-                <Button density="compact" iconStart={<I.AutoFixHighIcon />} onClick={() => onOpen(p.id, 'design')}>Design</Button>
-                <Button density="compact" hierarchy="secondary" iconStart={<I.TuneIcon />} onClick={() => onOpen(p.id, 'refine')}>Refine</Button>
-                <Button density="compact" hierarchy="secondary" iconStart={<I.PrintIcon />} onClick={() => onOpen(p.id, 'print')}>Print</Button>
-              </Stack>
-            </li>
-          );
-        })}
-      </ul>
+      {sorted.length ? (
+        <ul className="model-list">
+          {sorted.map((p) => {
+            const m = p.history[p.history.length - 1].model;
+            const href = `#/model/${p.id}/design`;
+            return (
+              <li key={p.id}>
+                {/* Image link is a mouse shortcut; the title link is the one keyboard and screen reader users get. */}
+                <a href={href} className="card-link" tabIndex={-1} aria-hidden>
+                  {p.thumb ? <img className="thumb" src={p.thumb} alt="" /> : <div className="thumb" />}
+                </a>
+                <Stack gap="xSmall" align="stretch">
+                  <Heading level={2} size={5}><a href={href} className="card-link">{title(p)}</a></Heading>
+                  <Text className="muted">{m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved'}</Text>
+                  <Text className="muted">{[edited(p.edited), `${p.history.length} ${p.history.length === 1 ? 'step' : 'steps'}`].filter(Boolean).join(' · ')}</Text>
+                </Stack>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <EmptyState.Root>
+          <EmptyState.Illustration><I.ViewInArIcon size={48} /></EmptyState.Illustration>
+          <EmptyState.Body>
+            <EmptyState.Copy>
+              <EmptyState.Title level={2}>No models yet</EmptyState.Title>
+              <EmptyState.Description>Describe a part in plain words, or import an STL.</EmptyState.Description>
+            </EmptyState.Copy>
+            <EmptyState.Actions><Button iconStart={<I.AddIcon />} onClick={() => go('new')}>New model</Button></EmptyState.Actions>
+          </EmptyState.Body>
+        </EmptyState.Root>
+      )}
+    </Stack>
+  );
+}
+
+function NewModel({onSubmit}: {onSubmit: (prompt: string) => Promise<void>}) {
+  return (
+    <Stack gap="xLarge" align="stretch">
+      <PageHeader.Root>
+        <PageHeader.Row><PageHeader.Title level={1}>New model</PageHeader.Title></PageHeader.Row>
+        <PageHeader.Description>Describe what you want to print, or start from an example.</PageHeader.Description>
+      </PageHeader.Root>
+      <div className="editor">
+        <PromptBox
+          autoFocus
+          label="Describe the part"
+          placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
+          action="Generate model"
+          icon={<I.AutoFixHighIcon />}
+          chips={examples}
+          onSubmit={onSubmit}
+        />
+      </div>
     </Stack>
   );
 }
@@ -464,7 +509,7 @@ function UploadButton({onFile}: {onFile: (f: File) => void}) {
   );
 }
 
-function PromptBox(props: {label: string; placeholder: string; action: string; icon: ReactNode; chips: string[]; onSubmit: (p: string) => Promise<void>}) {
+function PromptBox(props: {autoFocus?: boolean; label: string; placeholder: string; action: string; icon: ReactNode; chips: string[]; onSubmit: (p: string) => Promise<void>}) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const submit = (p: string) => {
@@ -477,6 +522,7 @@ function PromptBox(props: {label: string; placeholder: string; action: string; i
       <Field.Root name="prompt">
         <Field.Label>{props.label}</Field.Label>
         <TextArea
+          autoFocus={props.autoFocus}
           value={value}
           placeholder={props.placeholder}
           onValueChange={(v) => setValue(v)}
@@ -645,28 +691,6 @@ function PrintPanel({theme, positions, settings, setSettings, printers, material
         </EmptyState.Root>
       )}
 
-      <Table.Container>
-        <Table.Root aria-label="Material presets">
-          <Table.Head>
-            <Table.Row>
-              <Table.HeaderCell scope="col">Material</Table.HeaderCell>
-              <Table.HeaderCell scope="col">Nozzle</Table.HeaderCell>
-              <Table.HeaderCell scope="col">Bed</Table.HeaderCell>
-              <Table.HeaderCell scope="col">Fan</Table.HeaderCell>
-            </Table.Row>
-          </Table.Head>
-          <Table.Body>
-            {Object.entries(materials).map(([k, m]) => (
-              <Table.Row key={k}>
-                <Table.Cell><Table.CellPrimary>{m.name}</Table.CellPrimary><Table.CellSecondary>{m.density} g/cm³</Table.CellSecondary></Table.Cell>
-                <Table.Cell>{m.nozzle} °C</Table.Cell>
-                <Table.Cell>{m.bed} °C</Table.Cell>
-                <Table.Cell>{Math.round((m.fan / 255) * 100)}%</Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
-      </Table.Container>
     </Stack>
   );
 }
