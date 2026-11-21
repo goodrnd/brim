@@ -15,6 +15,7 @@ import {
   TextArea,
 } from '@earendil-works/elanor-react';
 import {ArrowBackIcon, DeleteIcon, OpenInNewIcon, ScheduleIcon} from './icons.ts';
+import {hms} from './lib/time.ts';
 import {go} from './route.ts';
 
 export interface Job {
@@ -35,8 +36,6 @@ export interface Job {
 
 export type Outcome = 'ok' | 'failed';
 const outcomes = {queued: 'Queued', ok: 'Printed', failed: 'Failed'};
-
-export const hms = (s: number) => ((m) => `${Math.floor(m / 60)} h ${m % 60} min`)(Math.round(s / 60));
 
 export function Jobs({
   jobs,
