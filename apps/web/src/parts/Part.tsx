@@ -30,9 +30,10 @@ import {
 } from '../ui/icons.ts';
 import {count, edited, title, type Entry, type Part, type Project} from '../lib/library.ts';
 import {PrintPanel} from './Print.tsx';
-import {ProjectPicker} from '../project/Projects.tsx';
+import {ProjectPicker} from '../projects/Projects.tsx';
 import {go} from '../lib/route.ts';
-import {download, RenameButton} from '../ui/ui.tsx';
+import {download} from '../lib/download.ts';
+import {RenameButton} from '../ui/controls.tsx';
 import {Viewer} from './Viewer.tsx';
 
 const examples = [

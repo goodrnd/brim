@@ -32,10 +32,10 @@ import {
   type Printer,
   type SliceSettings,
 } from '@brim/core/slicer.ts';
-import {Home} from './Home.tsx';
+import {Home} from './home/Home.tsx';
 import {Jobs, type Job} from './jobs/Jobs.tsx';
-import {Library} from './project/Library.tsx';
-import {NewPart, PartPage, sections} from './part/Part.tsx';
+import {Library} from './library/Library.tsx';
+import {NewPart, PartPage, sections} from './parts/Part.tsx';
 import {Settings} from './settings/Settings.tsx';
 import {AccountSettings, demoAccount, Login, type Account} from './settings/Account.tsx';
 import {go, useRoute} from './lib/route.ts';
@@ -55,7 +55,7 @@ import {
   type Project,
   type Use,
 } from './lib/library.ts';
-import {ProjectPage} from './project/Projects.tsx';
+import {ProjectPage} from './projects/Projects.tsx';
 
 // shortcut: imported meshes are not saved and thumbnails share the ~5 MB localStorage quota; move to IndexedDB if people import a lot or keep hundreds of parts.
 const storable = (ps: Array<Part>) =>

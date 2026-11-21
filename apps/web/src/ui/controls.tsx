@@ -3,14 +3,6 @@ import {useRef, useState} from 'react';
 import {EditIcon, UploadFileIcon} from './icons.ts';
 import {meshFormats} from '../lib/mesh.ts';
 
-export const download = (data: BlobPart, name: string, type: string) => {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([data], {type}));
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
-
 /** One row of a `.model-list`: thumbnail, title link and muted lines. */
 export function ListItem({
   href,

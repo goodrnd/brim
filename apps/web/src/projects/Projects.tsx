@@ -10,10 +10,10 @@ import {
   TextArea,
 } from '@earendil-works/elanor-react';
 import {AddIcon, ArrowBackIcon, DeleteIcon} from '../ui/icons.ts';
-import {PartList} from './Library.tsx';
+import {PartList} from '../library/Library.tsx';
 import {count, edited, type Note, type Part, type Project} from '../lib/library.ts';
 import {go} from '../lib/route.ts';
-import {RenameButton, UploadButton} from '../ui/ui.tsx';
+import {RenameButton, UploadButton} from '../ui/controls.tsx';
 
 /** One project: its parts and notes. Files come with the backend. */
 export function ProjectPage(props: {

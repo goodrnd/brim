@@ -23,7 +23,7 @@ import type {Material, Printer, slice, SliceResult, SliceSettings} from '@brim/c
 import {CloseIcon, DownloadIcon, HelpIcon, LayersIcon, ScheduleIcon} from '../ui/icons.ts';
 import {hms} from '../lib/time.ts';
 import {LayerPreview} from './LayerPreview.tsx';
-import {download} from '../ui/ui.tsx';
+import {download} from '../lib/download.ts';
 
 const sliceOffThread = (...args: Parameters<typeof slice>) =>
   new Promise<SliceResult>((resolve, reject) => {
@@ -32,7 +32,6 @@ const sliceOffThread = (...args: Parameters<typeof slice>) =>
     w.addEventListener('error', (e) => (reject(new Error(e.message)), w.terminate()));
     w.postMessage(args);
   });
-
 
 export function PrintPanel({
   theme,

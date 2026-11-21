@@ -3,7 +3,7 @@ import {describe} from '@brim/core/model.ts';
 import {AddIcon, FolderOpenIcon, ViewInArIcon} from '../ui/icons.ts';
 import {count, edited, itemsIn, title, type Note, type Part, type Project, type Use} from '../lib/library.ts';
 import {go} from '../lib/route.ts';
-import {ListItem, UploadButton} from '../ui/ui.tsx';
+import {ListItem, UploadButton} from '../ui/controls.tsx';
 
 /** Parts and Projects, one tab at a time. Parts are the things; Projects only reference them. */
 export function Library(props: {
