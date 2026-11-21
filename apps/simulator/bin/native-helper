@@ -1,0 +1,3 @@
+#!/bin/sh
+# bambu-printer-mcp runs BAMBU_NATIVE_HELPER as an executable; this one runs the TypeScript stand-in.
+exec node "$(dirname "$0")/../src/native-helper.ts" "$@"

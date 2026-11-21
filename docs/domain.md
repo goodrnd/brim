@@ -69,7 +69,7 @@ Live progress (percent, layer, temperatures) is read from the printer, never sto
 
 ## Open questions
 
-- Bambu printing (planned, via bambu-printer-mcp): send a Job as `print_3mf` with a slicer-made `.gcode.3mf` rather than our G-code, read status and AMS spools from `counterpart_print_progress` / `get_printer_filaments`, and copy `counterpart_print_record` into the Job's `run` when the print ends. Firmware `finished` does not prove the part printed, so `outcome` stays a person's call.
+- Bambu printing (in progress, via bambu-printer-mcp; `@brim/printer` connects to it, not yet used by the web app): send a Job as `print_3mf` with a slicer-made `.gcode.3mf` rather than our G-code, read status and AMS spools from `counterpart_print_progress` / `get_printer_filaments`, and copy `counterpart_print_record` into the Job's `run` when the print ends. Firmware `finished` does not prove the part printed, so `outcome` stays a person's call.
 
 - MCP edits: change the Part in place (labelled by `source`) or work on a copy?
 - Job outcome beyond ok/failed (photos, measurements, camera frames from `counterpart_print_record`). Printed Parts kept as stock ("3 brackets in the drawer") would come from `ok` Jobs.
