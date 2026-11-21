@@ -16,7 +16,7 @@ Printer · Material         profiles
 
 ## Terms
 
-- **Library**: every Part, File and Component, whether or not any Project uses it. It lists definitions, not physical copies.
+- **Library**: every Part, File and Component, whether or not any Project uses it. It lists definitions, not physical copies. The Library page shows Parts and Projects as tabs; Projects sit there for navigation but are not Library items.
 - **Part**: the one printable, editable object. Digital. Its `history` is a list of Entries, each a full snapshot. The last Entry is the current state; undo pops it, restore appends a copy of an earlier one.
 - **Entry**: `{prompt, changes, model}`. `model` is the geometry: `param` (a `Spec`, rebuilt on demand) or `mesh` (triangles; imports and anything after a boolean op).
 - **Model**: the geometry type in `@brim/core/model.ts`. Not a user-facing term; the UI says "part".

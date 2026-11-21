@@ -15,7 +15,7 @@ import {count, edited, itemsIn, type Note, type Project, type Use} from './libra
 
 type Thumb = {id: string; thumb?: string; edited?: number};
 
-/** The Projects page: every project, newest first. */
+/** The Library's Projects tab: every project, newest first. */
 export function ProjectList({
   projects,
   parts,
@@ -30,61 +30,49 @@ export function ProjectList({
   onNewProject: () => void;
 }) {
   const sorted = [...projects].sort((a, b) => b.edited - a.edited);
-  const newButton = (
-    <Button iconStart={<AddIcon />} onClick={onNewProject}>
-      New project
-    </Button>
-  );
-  return (
-    <Stack gap="xLarge" align="stretch">
-      <PageHeader.Root>
-        <PageHeader.Row>
-          <PageHeader.Title level={1}>Projects</PageHeader.Title>
-          {projects.length > 0 && <PageHeader.Actions>{newButton}</PageHeader.Actions>}
-        </PageHeader.Row>
-        <PageHeader.Description>{count(projects.length, 'project')}, saved in this browser.</PageHeader.Description>
-      </PageHeader.Root>
-      {projects.length ? (
-        <ul className="model-list">
-          {sorted.map((p) => {
-            const ids = itemsIn(p.id, uses);
-            const own = parts.filter((x) => ids.has(x.id));
-            const thumb = [...own].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0)).find((x) => x.thumb)?.thumb;
-            const href = `#/project/${p.id}`;
-            return (
-              <li key={p.id}>
-                <a href={href} className="card-link" tabIndex={-1} aria-hidden>
-                  {thumb ? <img className="thumb" src={thumb} alt="" /> : <div className="thumb" />}
+  return projects.length ? (
+    <ul className="model-list">
+      {sorted.map((p) => {
+        const ids = itemsIn(p.id, uses);
+        const own = parts.filter((x) => ids.has(x.id));
+        const thumb = [...own].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0)).find((x) => x.thumb)?.thumb;
+        const href = `#/project/${p.id}`;
+        return (
+          <li key={p.id}>
+            <a href={href} className="card-link" tabIndex={-1} aria-hidden>
+              {thumb ? <img className="thumb" src={thumb} alt="" /> : <div className="thumb" />}
+            </a>
+            <Stack gap="xSmall" align="stretch">
+              <Heading level={3} size={5}>
+                <a href={href} className="card-link">
+                  {p.name}
                 </a>
-                <Stack gap="xSmall" align="stretch">
-                  <Heading level={3} size={5}>
-                    <a href={href} className="card-link">
-                      {p.name}
-                    </a>
-                  </Heading>
-                  <Text className="muted">
-                    {[count(own.length, 'part'), count(notes.filter((n) => n.projectId === p.id).length, 'note')].join(
-                      ' · ',
-                    )}
-                  </Text>
-                  <Text className="muted">{edited(p.edited)}</Text>
-                </Stack>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <EmptyState.Root>
-          <EmptyState.Body>
-            <EmptyState.Copy>
-              <EmptyState.Title level={2}>No projects yet</EmptyState.Title>
-              <EmptyState.Description>Group parts and notes for something you are making.</EmptyState.Description>
-            </EmptyState.Copy>
-            <EmptyState.Actions>{newButton}</EmptyState.Actions>
-          </EmptyState.Body>
-        </EmptyState.Root>
-      )}
-    </Stack>
+              </Heading>
+              <Text className="muted">
+                {[count(own.length, 'part'), count(notes.filter((n) => n.projectId === p.id).length, 'note')].join(
+                  ' · ',
+                )}
+              </Text>
+              <Text className="muted">{edited(p.edited)}</Text>
+            </Stack>
+          </li>
+        );
+      })}
+    </ul>
+  ) : (
+    <EmptyState.Root>
+      <EmptyState.Body>
+        <EmptyState.Copy>
+          <EmptyState.Title level={2}>No projects yet</EmptyState.Title>
+          <EmptyState.Description>Group parts and notes for something you are making.</EmptyState.Description>
+        </EmptyState.Copy>
+        <EmptyState.Actions>
+          <Button iconStart={<AddIcon />} onClick={onNewProject}>
+            New project
+          </Button>
+        </EmptyState.Actions>
+      </EmptyState.Body>
+    </EmptyState.Root>
   );
 }
 
@@ -111,7 +99,7 @@ export function ProjectPage(props: {
           hierarchy="secondary"
           density="compact"
           iconStart={<ArrowBackIcon />}
-          onClick={() => (location.hash = '/projects')}
+          onClick={() => (location.hash = '/library/projects')}
         >
           Projects
         </Button>

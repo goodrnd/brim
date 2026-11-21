@@ -270,8 +270,10 @@ export function App() {
   const [notes, setNotes] = useStored<Array<Note>>('brim-notes', () => []);
   const [uses, setUses] = useStored<Array<Use>>('brim-uses', () => []);
   const route = useRoute();
-  // Old #/model/ and #/queue links still open.
-  const page = route[0] === 'model' ? 'part' : route[0] === 'queue' ? 'jobs' : (route[0] ?? 'home');
+  // Old #/model/, #/queue and #/projects links still open.
+  const old = {model: 'part', queue: 'jobs', projects: 'library'};
+  const page = (Object.hasOwn(old, route[0] ?? '') ? old[route[0] as keyof typeof old] : route[0]) ?? 'home';
+  const libraryTab = route[0] === 'projects' || (page === 'library' && route[1] === 'projects') ? 'projects' : 'parts';
   const part = page === 'part' ? parts.find((p) => p.id === route[1]) : undefined;
   const partProjects = part ? projectsOf(part.id, uses).filter((id) => projects.some((p) => p.id === id)) : [];
   // A part page links back to its project only when there is just one.
@@ -306,7 +308,7 @@ export function App() {
     setProjects(r.projects);
     setUses(r.uses);
     setNotes(r.notes);
-    go('projects');
+    go('library/projects');
   };
   const section = sections.includes(route[2]) ? route[2] : undefined; // none: the part overview
   const setSection = (s: string) => part && go(`part/${part.id}/${s}`);
@@ -462,7 +464,6 @@ export function App() {
                     {(
                       [
                         ['home', 'Home', HomeIcon],
-                        ['projects', 'Projects', FolderOpenIcon],
                         ['library', 'Library', Inventory2Icon],
                         [
                           'jobs',
@@ -479,8 +480,7 @@ export function App() {
                           active={
                             page === v ||
                             (v === 'jobs' && page === 'job') ||
-                            (v === 'projects' && (page === 'project' || (page === 'new' && !!route[1]))) ||
-                            (v === 'library' && (page === 'part' || (page === 'new' && !route[1])))
+                            (v === 'library' && (page === 'part' || page === 'project' || page === 'new'))
                           }
                         >
                           {label}
@@ -560,7 +560,7 @@ export function App() {
                     <EmptyState.Title level={1}>Project not found</EmptyState.Title>
                   </EmptyState.Copy>
                   <EmptyState.Actions>
-                    <Button onClick={() => go('projects')}>Back to Projects</Button>
+                    <Button onClick={() => go('library/projects')}>Back to Projects</Button>
                   </EmptyState.Actions>
                 </EmptyState.Body>
               </EmptyState.Root>
@@ -600,16 +600,23 @@ export function App() {
               </EmptyState.Root>
             ) : page === 'home' ? (
               <Home parts={parts} projects={projects} jobs={jobs} />
-            ) : page === 'projects' ? (
-              <ProjectList
-                projects={projects}
-                parts={parts}
-                notes={notes}
-                uses={uses}
-                onNewProject={() => newProject()}
-              />
             ) : (
-              <Library parts={parts} onUpload={(f) => upload(f)} />
+              <Library
+                tab={libraryTab}
+                parts={parts}
+                projectCount={projects.length}
+                onUpload={(f) => upload(f)}
+                onNewProject={() => newProject()}
+                projects={
+                  <ProjectList
+                    projects={projects}
+                    parts={parts}
+                    notes={notes}
+                    uses={uses}
+                    onNewProject={() => newProject()}
+                  />
+                }
+              />
             )
           ) : section ? (
             <Stack gap="xLarge" align="stretch">
@@ -873,22 +880,58 @@ function Home({parts, projects, jobs}: {parts: Array<Part>; projects: Array<Proj
   );
 }
 
-function Library({parts, onUpload}: {parts: Array<Part>; onUpload: (f: File) => void}) {
+/** Parts and Projects, one tab at a time. Parts are the things; Projects only reference them. */
+function Library(props: {
+  tab: 'parts' | 'projects';
+  parts: Array<Part>;
+  projectCount: number;
+  projects: ReactNode;
+  onUpload: (f: File) => void;
+  onNewProject: () => void;
+}) {
+  const {tab, parts} = props;
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
         <PageHeader.Row>
           <PageHeader.Title level={1}>Library</PageHeader.Title>
           <PageHeader.Actions>
-            <UploadButton onFile={onUpload} />
-            <Button iconStart={<AddIcon />} onClick={() => go('new')}>
-              New part
-            </Button>
+            {tab === 'parts' ? (
+              <>
+                <UploadButton onFile={props.onUpload} />
+                <Button iconStart={<AddIcon />} onClick={() => go('new')}>
+                  New part
+                </Button>
+              </>
+            ) : (
+              <Button iconStart={<AddIcon />} onClick={props.onNewProject}>
+                New project
+              </Button>
+            )}
           </PageHeader.Actions>
         </PageHeader.Row>
-        <PageHeader.Description>{count(parts.length, 'part')}, saved in this browser.</PageHeader.Description>
+        <PageHeader.Description>
+          {tab === 'parts'
+            ? 'Parts are the printable things, each with its own design history. One part can be used in many projects.'
+            : 'Projects group parts and notes for something you are making. They point to parts, not copies: editing a part changes it in every project.'}
+        </PageHeader.Description>
       </PageHeader.Root>
-      {parts.length ? (
+      <Tabs.Root value={tab} onValueChange={(v) => go(v === 'parts' ? 'library' : 'library/projects')}>
+        <Tabs.List aria-label="Library" className="sections">
+          <Tabs.Tab value="parts">
+            <ViewInArIcon />
+            Parts ({parts.length})
+          </Tabs.Tab>
+          <Tabs.Tab value="projects">
+            <FolderOpenIcon />
+            Projects ({props.projectCount})
+          </Tabs.Tab>
+          <Tabs.Indicator className="sections-indicator" />
+        </Tabs.List>
+      </Tabs.Root>
+      {tab === 'projects' ? (
+        props.projects
+      ) : parts.length ? (
         <PartList parts={parts} />
       ) : (
         <EmptyState.Root>
