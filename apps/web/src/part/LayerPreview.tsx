@@ -1,5 +1,5 @@
 import {useEffect, useRef} from 'react';
-import {tokenColor} from './color.ts';
+import {tokenColor} from '../lib/color.ts';
 import type {Layer} from '@brim/core/slicer.ts';
 
 /** Draws one sliced layer (walls + infill) top-down. */

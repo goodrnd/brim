@@ -9,7 +9,7 @@ import {
   type Note,
   type Project,
   type Use,
-} from '../src/library.ts';
+} from '../src/lib/library.ts';
 
 const projects: Array<Project> = [
   {id: 'a', name: 'Desk', edited: 1},

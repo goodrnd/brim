@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {migrate} from '../src/migrate.ts';
+import {migrate} from '../src/lib/migrate.ts';
 
 const store = (init: Record<string, string>) => {
   const m = new Map(Object.entries(init));

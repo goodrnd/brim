@@ -16,7 +16,7 @@ import {
   Scene,
   WebGLRenderer,
 } from 'three';
-import {tokenColor} from './color.ts';
+import {tokenColor} from '../lib/color.ts';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
 
 /** Orbitable preview of a triangle soup on a printer bed. Colours come from the design tokens. */

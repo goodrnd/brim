@@ -1,7 +1,7 @@
 import {Button, Field, Heading, Input, Modal, Stack, Text} from '@earendil-works/elanor-react';
 import {useRef, useState} from 'react';
 import {EditIcon, UploadFileIcon} from './icons.ts';
-import {meshFormats} from './mesh.ts';
+import {meshFormats} from '../lib/mesh.ts';
 
 export const download = (data: BlobPart, name: string, type: string) => {
   const a = document.createElement('a');

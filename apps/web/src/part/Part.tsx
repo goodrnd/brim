@@ -27,12 +27,12 @@ import {
   RestartAltIcon,
   TuneIcon,
   UndoIcon,
-} from './icons.ts';
-import {count, edited, title, type Entry, type Part, type Project} from './library.ts';
+} from '../ui/icons.ts';
+import {count, edited, title, type Entry, type Part, type Project} from '../lib/library.ts';
 import {PrintPanel} from './Print.tsx';
-import {ProjectPicker} from './Projects.tsx';
-import {go} from './route.ts';
-import {download, RenameButton} from './ui.tsx';
+import {ProjectPicker} from '../project/Projects.tsx';
+import {go} from '../lib/route.ts';
+import {download, RenameButton} from '../ui/ui.tsx';
 import {Viewer} from './Viewer.tsx';
 
 const examples = [

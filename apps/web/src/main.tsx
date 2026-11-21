@@ -6,7 +6,7 @@ import './app.css';
 
 import {createRoot} from 'react-dom/client';
 import {App} from './App.tsx';
-import {migrate} from './migrate.ts';
+import {migrate} from './lib/migrate.ts';
 
 migrate(localStorage);
 

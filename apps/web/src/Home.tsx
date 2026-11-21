@@ -1,7 +1,7 @@
 import {Card, Grid, PageHeader, Stack} from '@earendil-works/elanor-react';
-import type {Job} from './Jobs.tsx';
+import type {Job} from './jobs/Jobs.tsx';
 import {hms} from './lib/time.ts';
-import {count, type Part, type Project} from './library.ts';
+import {count, type Part, type Project} from './lib/library.ts';
 
 const grams = (js: Array<Job>) => `${js.reduce((a, j) => a + j.grams, 0).toFixed(0)} g`;
 

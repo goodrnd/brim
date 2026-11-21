@@ -1,6 +1,6 @@
 import {Button, Field, Heading, Input, PageHeader, Stack, Text} from '@earendil-works/elanor-react';
 import {useState, type ReactNode} from 'react';
-import {AutoFixHighIcon, FolderOpenIcon, LoginIcon, LogoutIcon, PrintIcon} from './icons.ts';
+import {AutoFixHighIcon, FolderOpenIcon, LoginIcon, LogoutIcon, PrintIcon} from '../ui/icons.ts';
 
 const features = [
   [AutoFixHighIcon, 'Create parts', 'Start from a reference or a description, then refine until it fits.'],

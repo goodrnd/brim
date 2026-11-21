@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {parseMesh} from '../src/mesh.ts';
+import {parseMesh} from '../src/lib/mesh.ts';
 
 const enc = (s: string) => new TextEncoder().encode(s).buffer as ArrayBuffer;
 

@@ -13,8 +13,8 @@ import {
   TextArea,
 } from '@earendil-works/elanor-react';
 import {useState, type ReactNode} from 'react';
-import {AddIcon, ArrowBackIcon, ContentCopyIcon, DeleteIcon, EditIcon, RestartAltIcon} from './icons.ts';
-import {go} from './route.ts';
+import {AddIcon, ArrowBackIcon, ContentCopyIcon, DeleteIcon, EditIcon, RestartAltIcon} from '../ui/icons.ts';
+import {go} from '../lib/route.ts';
 import {
   bambuModels,
   materials as stockMaterials,

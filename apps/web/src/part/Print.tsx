@@ -20,10 +20,10 @@ import {
 import {useState} from 'react';
 import {bounds, fits, toStl} from '@brim/core/model.ts';
 import type {Material, Printer, slice, SliceResult, SliceSettings} from '@brim/core/slicer.ts';
-import {CloseIcon, DownloadIcon, HelpIcon, LayersIcon, ScheduleIcon} from './icons.ts';
-import {hms} from './lib/time.ts';
+import {CloseIcon, DownloadIcon, HelpIcon, LayersIcon, ScheduleIcon} from '../ui/icons.ts';
+import {hms} from '../lib/time.ts';
 import {LayerPreview} from './LayerPreview.tsx';
-import {download} from './ui.tsx';
+import {download} from '../ui/ui.tsx';
 
 const sliceOffThread = (...args: Parameters<typeof slice>) =>
   new Promise<SliceResult>((resolve, reject) => {

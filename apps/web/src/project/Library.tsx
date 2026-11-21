@@ -1,9 +1,9 @@
 import {Button, EmptyState, PageHeader, Stack, Tabs} from '@earendil-works/elanor-react';
 import {describe} from '@brim/core/model.ts';
-import {AddIcon, FolderOpenIcon, ViewInArIcon} from './icons.ts';
-import {count, edited, itemsIn, title, type Note, type Part, type Project, type Use} from './library.ts';
-import {go} from './route.ts';
-import {ListItem, UploadButton} from './ui.tsx';
+import {AddIcon, FolderOpenIcon, ViewInArIcon} from '../ui/icons.ts';
+import {count, edited, itemsIn, title, type Note, type Part, type Project, type Use} from '../lib/library.ts';
+import {go} from '../lib/route.ts';
+import {ListItem, UploadButton} from '../ui/ui.tsx';
 
 /** Parts and Projects, one tab at a time. Parts are the things; Projects only reference them. */
 export function Library(props: {

@@ -14,9 +14,9 @@ import {
   Text,
   TextArea,
 } from '@earendil-works/elanor-react';
-import {ArrowBackIcon, DeleteIcon, OpenInNewIcon, ScheduleIcon} from './icons.ts';
-import {hms} from './lib/time.ts';
-import {go} from './route.ts';
+import {ArrowBackIcon, DeleteIcon, OpenInNewIcon, ScheduleIcon} from '../ui/icons.ts';
+import {hms} from '../lib/time.ts';
+import {go} from '../lib/route.ts';
 
 export interface Job {
   id: string;
