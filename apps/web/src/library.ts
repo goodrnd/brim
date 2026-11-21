@@ -1,4 +1,24 @@
-// Projects, notes and uses; see docs/domain.md. Kept as flat lists so they map 1:1 to the planned server tables.
+// Parts, projects, notes and uses; see docs/domain.md. Kept as flat lists so they map 1:1 to the planned server tables.
+import type {Model} from '@brim/core/model.ts';
+
+/** One step in a part's history: a full snapshot. */
+export interface Entry {
+  prompt: string;
+  changes: Array<string>;
+  model: Model;
+}
+
+export interface Part {
+  id: string;
+  name?: string;
+  description?: string; // user's own notes on what the part is for
+  thumb?: string; // webp data URL of the viewer
+  history: Array<Entry>;
+  edited?: number; // ms timestamp of the last design change or rename
+}
+
+export const title = (p: Part) =>
+  p.name || ((m) => (m.type === 'mesh' ? m.name : 'Untitled ' + m.spec.kind))(p.history.at(-1)!.model);
 
 export interface Project {
   id: string;
@@ -40,6 +60,12 @@ export const removeProject = (id: string, s: {projects: Array<Project>; uses: Ar
   projects: s.projects.filter((p) => p.id !== id),
   uses: s.uses.filter((u) => u.projectId !== id),
   notes: s.notes.filter((n) => n.projectId !== id),
+});
+
+/** Deleting a part drops its uses; projects stay. */
+export const removePart = (id: string, s: {parts: Array<Part>; uses: Array<Use>}) => ({
+  parts: s.parts.filter((p) => p.id !== id),
+  uses: s.uses.filter((u) => u.itemId !== id),
 });
 
 export const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;

@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {itemsIn, projectsOf, removeProject, withProjects, type Note, type Project, type Use} from '../src/library.ts';
+import {
+  itemsIn,
+  projectsOf,
+  removePart,
+  removeProject,
+  withProjects,
+  type Note,
+  type Project,
+  type Use,
+} from '../src/library.ts';
 
 const projects: Array<Project> = [
   {id: 'a', name: 'Desk', edited: 1},
@@ -33,4 +42,17 @@ void test('removing a project drops its uses and notes, not other projects', () 
     r.notes.map((n) => n.id),
     ['n2'],
   );
+});
+
+void test('removing a part drops its uses in every project', () => {
+  const parts = [
+    {id: '1', history: []},
+    {id: '2', history: []},
+  ];
+  const r = removePart('1', {parts, uses: [use('a', '1'), use('b', '1'), use('a', '2')]});
+  assert.deepEqual(
+    r.parts.map((p) => p.id),
+    ['2'],
+  );
+  assert.deepEqual(r.uses, [use('a', '2')]);
 });

@@ -9,84 +9,23 @@ import {
   Text,
   TextArea,
 } from '@earendil-works/elanor-react';
-import type {ReactNode} from 'react';
 import {AddIcon, ArrowBackIcon, DeleteIcon} from './icons.ts';
-import {count, edited, itemsIn, type Note, type Project, type Use} from './library.ts';
+import {PartList} from './Library.tsx';
+import {count, edited, type Note, type Part, type Project} from './library.ts';
+import {go} from './route.ts';
+import {RenameButton, UploadButton} from './ui.tsx';
 
-type Thumb = {id: string; thumb?: string; edited?: number};
-
-/** The Library's Projects tab: every project, newest first. */
-export function ProjectList({
-  projects,
-  parts,
-  notes,
-  uses,
-  onNewProject,
-}: {
-  projects: Array<Project>;
-  parts: Array<Thumb>;
-  notes: Array<Note>;
-  uses: Array<Use>;
-  onNewProject: () => void;
-}) {
-  const sorted = [...projects].sort((a, b) => b.edited - a.edited);
-  return projects.length ? (
-    <ul className="model-list">
-      {sorted.map((p) => {
-        const ids = itemsIn(p.id, uses);
-        const own = parts.filter((x) => ids.has(x.id));
-        const thumb = [...own].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0)).find((x) => x.thumb)?.thumb;
-        const href = `#/project/${p.id}`;
-        return (
-          <li key={p.id}>
-            <a href={href} className="card-link" tabIndex={-1} aria-hidden>
-              {thumb ? <img className="thumb" src={thumb} alt="" /> : <div className="thumb" />}
-            </a>
-            <Stack gap="xSmall" align="stretch">
-              <Heading level={3} size={5}>
-                <a href={href} className="card-link">
-                  {p.name}
-                </a>
-              </Heading>
-              <Text className="muted">
-                {[count(own.length, 'part'), count(notes.filter((n) => n.projectId === p.id).length, 'note')].join(
-                  ' · ',
-                )}
-              </Text>
-              <Text className="muted">{edited(p.edited)}</Text>
-            </Stack>
-          </li>
-        );
-      })}
-    </ul>
-  ) : (
-    <EmptyState.Root>
-      <EmptyState.Body>
-        <EmptyState.Copy>
-          <EmptyState.Title level={2}>No projects yet</EmptyState.Title>
-          <EmptyState.Description>Group parts and notes for something you are making.</EmptyState.Description>
-        </EmptyState.Copy>
-        <EmptyState.Actions>
-          <Button iconStart={<AddIcon />} onClick={onNewProject}>
-            New project
-          </Button>
-        </EmptyState.Actions>
-      </EmptyState.Body>
-    </EmptyState.Root>
-  );
-}
-
-/** One project: its parts (rendered by the caller) and notes. Files come with the backend. */
+/** One project: its parts and notes. Files come with the backend. */
 export function ProjectPage(props: {
   project: Project;
-  partCount: number;
-  parts: ReactNode;
-  actions: ReactNode;
-  partActions: ReactNode;
+  parts: Array<Part>;
   notes: Array<Note>;
   setNotes: (f: (n: Array<Note>) => Array<Note>) => void;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+  onUpload: (f: File) => void;
 }) {
-  const {project, notes, setNotes} = props;
+  const {project, parts, notes, setNotes} = props;
   const own = notes.filter((n) => n.projectId === project.id);
   const update = (id: string, body: string) =>
     setNotes((ns) => ns.map((n) => (n.id === id ? {...n, body, edited: Date.now()} : n)));
@@ -99,7 +38,7 @@ export function ProjectPage(props: {
           hierarchy="secondary"
           density="compact"
           iconStart={<ArrowBackIcon />}
-          onClick={() => (location.hash = '/library/projects')}
+          onClick={() => go('library/projects')}
         >
           Projects
         </Button>
@@ -107,10 +46,15 @@ export function ProjectPage(props: {
       <PageHeader.Root>
         <PageHeader.Row>
           <PageHeader.Title level={1}>{project.name}</PageHeader.Title>
-          <PageHeader.Actions>{props.actions}</PageHeader.Actions>
+          <PageHeader.Actions>
+            <RenameButton key={project.id} what="project" name={project.name} onRename={props.onRename} />
+            <Button hierarchy="secondary" iconStart={<DeleteIcon />} onClick={props.onDelete}>
+              Delete
+            </Button>
+          </PageHeader.Actions>
         </PageHeader.Row>
         <PageHeader.Description>
-          {[count(props.partCount, 'part'), count(own.length, 'note'), edited(project.edited)].join(' · ')}
+          {[count(parts.length, 'part'), count(own.length, 'note'), edited(project.edited)].join(' · ')}
         </PageHeader.Description>
       </PageHeader.Root>
 
@@ -120,11 +64,14 @@ export function ProjectPage(props: {
             Parts
           </Heading>
           <Stack direction="row" gap="small">
-            {props.partActions}
+            <UploadButton compact onFile={props.onUpload} />
+            <Button density="compact" iconStart={<AddIcon />} onClick={() => go(`new/${project.id}`)}>
+              New part
+            </Button>
           </Stack>
         </Stack>
-        {props.partCount ? (
-          props.parts
+        {parts.length ? (
+          <PartList parts={parts} />
         ) : (
           <EmptyState.Root>
             <EmptyState.Body>

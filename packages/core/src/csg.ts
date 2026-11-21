@@ -4,7 +4,7 @@ import Module, {type Manifold} from 'manifold-3d';
 const wasm = await Module();
 wasm.setup();
 
-export type BoolOp = 'add' | 'subtract' | 'intersect';
+export type BoolOp = 'add' | 'subtract';
 
 /** Welds a triangle soup into an indexed manifold. Throws when the soup is not a closed solid. */
 export function toManifold(p: Float32Array): Manifold {
@@ -49,7 +49,7 @@ export function toSoup(m: Manifold): Float32Array {
 /** Combines two triangle soups into one closed soup. */
 export function boolean(a: Float32Array, b: Float32Array, op: BoolOp): Float32Array {
   const [ma, mb] = [toManifold(a), toManifold(b)];
-  const r = op === 'add' ? ma.add(mb) : op === 'subtract' ? ma.subtract(mb) : ma.intersect(mb);
+  const r = op === 'add' ? ma.add(mb) : ma.subtract(mb);
   try {
     if (r.isEmpty()) {
       throw new Error(`${op} left nothing`);

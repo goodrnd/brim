@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {buildPositions, parsePrompt, toStl, volume, type Kind} from '../src/model.ts';
+import {
+  applyOps,
+  bounds,
+  buildPositions,
+  editMesh,
+  newSpec,
+  parsePrompt,
+  toStl,
+  volume,
+  type Kind,
+} from '../src/model.ts';
 import {slice} from '../src/slicer.ts';
 
 void test('prompt parsing', () => {
@@ -70,5 +80,30 @@ void test('every kind builds a closed, outward mesh that slices', () => {
     assert.ok(r.layers.length > 0 && r.grams > 0, `${k} slices`);
     assert.match(r.gcode, /M109 S210/);
     assert.doesNotMatch(r.gcode, /NaN/);
+  }
+});
+
+void test('mesh edits read size words like spec edits', async () => {
+  const positions = buildPositions(newSpec('box', {width: 100, corner: 0}));
+  const width = async (prompt: string) => {
+    const {model} = await editMesh(prompt, {type: 'mesh', name: 'b', positions});
+    assert.ok(model.type === 'mesh');
+    return Math.round(bounds(model.positions)[1][0] - bounds(model.positions)[0][0]);
+  };
+  assert.equal(await width('make it 20% bigger'), 120);
+  assert.equal(await width('scale to 80%'), 80);
+  assert.equal(await width('narrower'), 85);
+});
+
+void test('out-of-range values still build a mesh', async () => {
+  for (const [kind, field, value] of [
+    ['star', 'points', 0],
+    ['cylinder', 'segments', 0],
+    ['box', 'width', 0],
+    ['gear', 'teeth', 1],
+  ] as const) {
+    const {model} = await applyOps({type: 'param', spec: newSpec(kind)}, [{op: 'set', field, value}]);
+    assert.ok(model.type === 'param');
+    assert.ok(volume(buildPositions(model.spec)) > 0, `${kind} ${field} ${value}`);
   }
 });

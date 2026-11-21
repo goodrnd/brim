@@ -214,7 +214,7 @@ export function slice(
   let pos: Pt = [0, 0];
   const feed = set.speed * 60;
 
-  const emit = (to: Pt, z: number, extrude: boolean, layerH: number, speed = feed) => {
+  const emit = (to: Pt, extrude: boolean, layerH: number, speed = feed) => {
     const d = Math.hypot(to[0] - pos[0], to[1] - pos[1]);
     if (d < 1e-3) {
       return;
@@ -231,15 +231,14 @@ export function slice(
       seconds += d / 150;
     }
     pos = to;
-    void z;
   };
   const travel = (to: Pt) => {
     if (Math.hypot(to[0] - pos[0], to[1] - pos[1]) > 2) {
       lines.push('G1 E-0.8 F2400');
-      emit(to, 0, false, 0);
+      emit(to, false, 0);
       lines.push('G1 E0.8 F2400');
     } else {
-      emit(to, 0, false, 0);
+      emit(to, false, 0);
     }
   };
 
@@ -277,24 +276,24 @@ export function slice(
       [...loop.slice(1), loop[0]].forEach((q, i) => {
         const zz = printZ - set.layer + (set.layer * (i + 1)) / n;
         lines.push(`G1 Z${zz.toFixed(3)}`);
-        emit(q, zz, true, set.layer, firstSpeed);
+        emit(q, true, set.layer, firstSpeed);
       });
     } else {
       for (const loop of loops) {
         travel(loop[0]);
         for (const q of [...loop.slice(1), loop[0]]) {
-          emit(q, printZ, true, set.layer, firstSpeed);
+          emit(q, true, set.layer, firstSpeed);
         }
         layer.paths.push({kind: 'wall', pts: [...loop, loop[0]]});
       }
-      const isSolid = li < solid || li >= count - solid || (set.vase && li < solid);
+      const isSolid = li < solid || li >= count - solid;
       const density = isSolid ? 100 : set.infill;
       if (density > 0 && loops.length && !(set.vase && !isSolid)) {
         const spacing = NOZZLE / (density / 100);
-        const angle = isSolid ? (li % 2 ? Math.PI / 4 : -Math.PI / 4) : li % 2 ? Math.PI / 4 : -Math.PI / 4;
+        const angle = li % 2 ? Math.PI / 4 : -Math.PI / 4;
         for (const seg of infill(loops, spacing, angle)) {
           travel(seg[0]);
-          emit(seg[1], printZ, true, set.layer, firstSpeed);
+          emit(seg[1], true, set.layer, firstSpeed);
           layer.paths.push({kind: 'infill', pts: seg});
         }
       }

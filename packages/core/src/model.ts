@@ -1,5 +1,4 @@
 import {ExtrudeGeometry, Path, Shape} from 'three';
-import {boolean} from './csg.ts';
 
 // Regex prompt parser: the fallback when no LLM key is configured (see intent.ts).
 
@@ -111,6 +110,43 @@ function grab(text: string, words: string): number | undefined {
   }
 }
 
+type Resize = {x: number; y: number; z: number; note: string};
+
+/** Relative size words → scale factors (x = width, y = depth, z = height). Shared by spec and mesh edits. */
+function resizes(t: string): Array<Resize> {
+  const out: Array<Resize> = [];
+  const all = (f: number, note: string) => f > 0 && out.push({x: f, y: f, z: f, note});
+  const rel = /(\d+(?:\.\d+)?)\s*%\s*(bigger|larger|smaller)/.exec(t);
+  if (rel) {
+    all(rel[2] === 'smaller' ? 1 - Number(rel[1]) / 100 : 1 + Number(rel[1]) / 100, `${rel[1]}% ${rel[2]}`);
+  } else if (/\b(twice|double) (as )?(big|large|the size)/.test(t)) {
+    all(2, 'doubled the size');
+  } else if (/\bhalf (the )?size\b/.test(t)) {
+    all(0.5, 'halved the size');
+  } else if (/\b(bigger|larger)\b/.test(t)) {
+    all(1.25, 'scaled up 25%');
+  } else if (/\bsmaller\b/.test(t)) {
+    all(0.8, 'scaled down 20%');
+  }
+  const pct = /\bscale\D{0,6}(\d+(?:\.\d+)?)\s*%/.exec(t);
+  if (pct) {
+    all(Number(pct[1]) / 100, `scaled to ${pct[1]}%`);
+  }
+  if (/\b(taller|higher)\b/.test(t)) {
+    out.push({x: 1, y: 1, z: 1.25, note: 'made it 25% taller'});
+  }
+  if (/\b(shorter|lower|flatter)\b/.test(t)) {
+    out.push({x: 1, y: 1, z: 0.8, note: 'made it 20% shorter'});
+  }
+  if (/\b(wider|fatter)\b/.test(t)) {
+    out.push({x: 1.2, y: 1.2, z: 1, note: 'made it 20% wider'});
+  }
+  if (/\b(narrower|slimmer|skinnier)\b/.test(t)) {
+    out.push({x: 0.85, y: 0.85, z: 1, note: 'made it 15% narrower'});
+  }
+  return out;
+}
+
 const fmt = (n: number) => String(Math.round(n * 10) / 10);
 const round = new Set<Kind>(['vase', 'cup', 'cylinder', 'tube', 'cone', 'sphere', 'gear', 'hex', 'star']);
 
@@ -174,43 +210,11 @@ export function parsePrompt(prompt: string, prev?: Spec) {
 
   // Relative edits.
   if (prev) {
-    const mul = (keys: Array<'width' | 'depth' | 'height'>, f: number, note: string) => {
-      for (const k of keys) {
-        s[k] *= f;
-      }
-      changes.push(note);
-    };
-    const rel = /(\d+(?:\.\d+)?)\s*%\s*(bigger|larger|smaller)/.exec(t);
-    if (rel) {
-      mul(
-        ['width', 'depth', 'height'],
-        rel[2] === 'smaller' ? 1 - Number(rel[1]) / 100 : 1 + Number(rel[1]) / 100,
-        `${rel[1]}% ${rel[2]}`,
-      );
-    } else if (/\b(twice|double) (as )?(big|large|the size)/.test(t)) {
-      mul(['width', 'depth', 'height'], 2, 'doubled the size');
-    } else if (/\bhalf (the )?size\b/.test(t)) {
-      mul(['width', 'depth', 'height'], 0.5, 'halved the size');
-    } else if (/\b(bigger|larger)\b/.test(t)) {
-      mul(['width', 'depth', 'height'], 1.25, 'scaled up 25%');
-    } else if (/\bsmaller\b/.test(t)) {
-      mul(['width', 'depth', 'height'], 0.8, 'scaled down 20%');
-    }
-    const pct = /\bscale\D{0,6}(\d+(?:\.\d+)?)\s*%/.exec(t);
-    if (pct) {
-      mul(['width', 'depth', 'height'], Number(pct[1]) / 100, `scaled to ${pct[1]}%`);
-    }
-    if (/\b(taller|higher)\b/.test(t)) {
-      mul(['height'], 1.25, 'made it 25% taller');
-    }
-    if (/\b(shorter|lower|flatter)\b/.test(t)) {
-      mul(['height'], 0.8, 'made it 20% shorter');
-    }
-    if (/\b(wider|fatter)\b/.test(t)) {
-      mul(['width', 'depth'], 1.2, 'made it 20% wider');
-    }
-    if (/\b(narrower|slimmer|skinnier)\b/.test(t)) {
-      mul(['width', 'depth'], 0.85, 'made it 15% narrower');
+    for (const r of resizes(t)) {
+      s.width *= r.x;
+      s.depth *= r.y;
+      s.height *= r.z;
+      changes.push(r.note);
     }
     if (/\b(thicker|sturdier|stronger) walls?\b|\b(sturdier|stronger)\b/.test(t)) {
       set('wall', (s.wall || 1.2) + 1, 'thickened the walls by 1 mm');
@@ -305,7 +309,7 @@ export function parsePrompt(prompt: string, prev?: Spec) {
   const width = radius ? radius * 2 : grab(t, 'wide|width|diameter|across|dia|long|length|size');
   if (width) {
     set('width', width, `width ${fmt(width)} mm`);
-    if (round.has(s.kind) || s.kind === 'hex') {
+    if (round.has(s.kind)) {
       s.depth = width;
     }
   }
@@ -352,8 +356,17 @@ export function parsePrompt(prompt: string, prev?: Spec) {
 export const newSpec = (kind: Kind, over: Partial<Spec> = {}): Spec =>
   normalize({...base, ...defaults[kind], ...over, kind});
 
-/** Enforces the shape rules every spec must satisfy, in place. */
+const int = (v: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(v)));
+
+/** Enforces the shape rules every spec must satisfy, in place. The limits keep it buildable: no empty or runaway meshes. */
 export function normalize(s: Spec): Spec {
+  s.width = Math.max(1, s.width);
+  s.depth = Math.max(1, s.depth);
+  s.height = Math.max(1, s.height);
+  s.teeth = int(s.teeth, 6, 200);
+  s.points = int(s.points, 3, 100);
+  s.ribs = int(s.ribs, 0, 200);
+  s.segments = int(s.segments, 3, 512);
   if (round.has(s.kind)) {
     s.depth = s.width;
   }
@@ -385,10 +398,12 @@ export const describeOp = (o: Op) =>
         : `${o.op} ${describe(o.part)} at ${o.at.map(fmt).join(', ')}`;
 
 /** Applies ops to a model. Returns the new model and one note per op. A boolean turns a parametric model into a mesh. */
-export function applyOps(m: Model, ops: Array<Op>) {
+export async function applyOps(m: Model, ops: Array<Op>) {
   const changes: Array<string> = [];
   for (const o of ops) {
     if ('part' in o) {
+      // Loaded on first use: the manifold WASM is large and most edits never need it.
+      const {boolean} = await import('./csg.ts');
       const tool = buildPositions(o.part);
       for (let i = 0; i < tool.length; i += 3) {
         for (let k = 0; k < 3; k++) {
@@ -397,7 +412,7 @@ export function applyOps(m: Model, ops: Array<Op>) {
       }
       try {
         const p = boolean(m.type === 'param' ? buildPositions(m.spec) : m.positions, tool, o.op);
-        m = {type: 'mesh', name: m.type === 'mesh' ? m.name : m.spec.kind, positions: finalize(Array.from(p))};
+        m = {type: 'mesh', name: m.type === 'mesh' ? m.name : m.spec.kind, positions: finalize(p)};
         changes.push(describeOp(o));
       } catch (error) {
         changes.push(`skipped ${describeOp(o)}: ${(error as Error).message}`);
@@ -421,7 +436,7 @@ export function applyOps(m: Model, ops: Array<Op>) {
         changes.push(`skipped ${describeOp(o)}: imported meshes have no ${o.field}`);
         continue;
       }
-      m = {...m, positions: finalize(Array.from(transform(m.positions, o)))};
+      m = {...m, positions: finalize(transform(m.positions, o))};
       changes.push(describeOp(o));
     }
   }
@@ -449,75 +464,27 @@ function transform(src: Float32Array, o: Extract<Op, {op: 'scale' | 'rotate'}>):
   return p;
 }
 
-/** Scales, flips or drills an uploaded mesh. */
-export function editMesh(prompt: string, positions: Float32Array) {
+/** Edits an imported mesh: the size words parsePrompt knows, plus flip, rotate and drilling a hole. */
+export async function editMesh(prompt: string, m: Extract<Model, {type: 'mesh'}>) {
   const t = prompt.toLowerCase();
-  let [sx, sy, sz] = [1, 1, 1];
-  const changes: Array<string> = [];
-  const pct = /(\d+(?:\.\d+)?)\s*%/.exec(t);
-  if (pct) {
-    sx = sy = sz = Number(pct[1]) / 100;
-    changes.push(`scaled to ${pct[1]}%`);
-  } else if (/\b(twice|double)\b/.test(t)) {
-    sx = sy = sz = 2;
-    changes.push('doubled the size');
-  } else if (/\bhalf\b/.test(t)) {
-    sx = sy = sz = 0.5;
-    changes.push('halved the size');
-  } else if (/\b(bigger|larger)\b/.test(t)) {
-    sx = sy = sz = 1.25;
-    changes.push('scaled up 25%');
-  } else if (/\bsmaller\b/.test(t)) {
-    sx = sy = sz = 0.8;
-    changes.push('scaled down 20%');
-  }
-  if (/\b(taller|higher)\b/.test(t)) {
-    sz *= 1.25;
-    changes.push('made it 25% taller');
-  }
-  if (/\b(shorter|lower|flatter)\b/.test(t)) {
-    sz *= 0.8;
-    changes.push('made it 20% shorter');
-  }
-  if (/\bwider\b/.test(t)) {
-    sx *= 1.2;
-    sy *= 1.2;
-    changes.push('made it 20% wider');
-  }
-  const out = new Float32Array(positions);
-  for (let i = 0; i < out.length; i += 3) {
-    out[i] *= sx;
-    out[i + 1] *= sy;
-    out[i + 2] *= sz;
-  }
+  const ops: Array<Op> = resizes(t).map(({x, y, z}) => ({op: 'scale', x, y, z}));
   if (/\b(flip|upside down)\b/.test(t)) {
-    for (let i = 0; i < out.length; i += 3) {
-      out[i + 1] = -out[i + 1];
-      out[i + 2] = -out[i + 2];
-    }
-    changes.push('flipped it upside down');
+    ops.push({op: 'rotate', axis: 'x', degrees: 180});
   }
   if (/\b(rotate|stand( it)? up|lay( it)? (flat|down))\b/.test(t)) {
-    for (let i = 0; i < out.length; i += 3) {
-      const y = out[i + 1];
-      out[i + 1] = -out[i + 2];
-      out[i + 2] = y;
-    }
-    changes.push('rotated 90° about X');
+    ops.push({op: 'rotate', axis: 'x', degrees: 90});
   }
-  let result = finalize(Array.from(out));
-  if (/\b(hole|drill|bore)\b/.test(t)) {
-    const d = grab(t, 'hole|bore') ?? 4;
-    const h = bounds(result)[1][2] + 2;
-    const r = applyOps({type: 'mesh', name: '', positions: result}, [
-      {op: 'subtract', part: newSpec('cylinder', {width: d, height: h}), at: [0, 0, -1]},
+  const r = await applyOps(m, ops);
+  if (/\b(hole|drill|bore)\b/.test(t) && r.model.type === 'mesh') {
+    // Sized after the edits above, so the cylinder goes all the way through.
+    const height = bounds(r.model.positions)[1][2] + 2;
+    const width = grab(t, 'hole|bore') ?? 4;
+    const hole = await applyOps(r.model, [
+      {op: 'subtract', part: newSpec('cylinder', {width, height}), at: [0, 0, -1]},
     ]);
-    if (r.model.type === 'mesh') {
-      result = r.model.positions;
-    }
-    changes.push(...r.changes);
+    return {model: hole.model, changes: [...r.changes, ...hole.changes]};
   }
-  return {positions: result, changes};
+  return r;
 }
 
 // ---------- geometry ----------
@@ -698,7 +665,7 @@ export function buildPositions(s: Spec): Float32Array {
 }
 
 /** Centres on XY, rests on z=0, and makes the winding point outward. */
-export function finalize(arr: Array<number>): Float32Array {
+export function finalize(arr: ArrayLike<number>): Float32Array {
   const out = new Float32Array(arr);
   const [min, max] = bounds(out);
   const [cx, cy] = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2];
@@ -728,6 +695,12 @@ export function bounds(p: Float32Array): [Array<number>, Array<number>] {
   }
   return [min, max];
 }
+
+/** Bounding-box size [x, y, z] in mm. */
+export const size = (p: Float32Array) => ((b) => b[1].map((v, k) => v - b[0][k]))(bounds(p));
+
+/** True when the part fits a bed of [x, y, max z] mm. */
+export const fits = (p: Float32Array, bed: ArrayLike<number>) => size(p).every((v, k) => v <= bed[k]);
 
 /** Signed volume in mm³ (positive when faces point outward). */
 export function volume(p: Float32Array): number {

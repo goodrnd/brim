@@ -41,5 +41,6 @@ const intentApi = (): Plugin => ({
 export default defineConfig(({mode}) => {
   // .env lives at the repo root; load every var (not just VITE_*) into process.env for the server only.
   Object.assign(process.env, {...loadEnv(mode, '../..', ''), ...process.env});
-  return {plugins: [react(), intentApi()]};
+  // ES workers: the slicer worker pulls in model.ts, whose lazy csg import needs code splitting.
+  return {plugins: [react(), intentApi()], worker: {format: 'es'}};
 });

@@ -1,144 +1,61 @@
 import {
   Button,
-  Card,
-  Checkbox,
-  CodeSnippet,
-  CopyButton,
-  Dropdown,
   EmptyState,
-  Field,
-  Grid,
-  Heading,
-  IconButton,
-  Input,
-  InlineCode,
-  KeyboardKey,
-  KeyValue,
-  Meter,
-  Modal,
-  PageHeader,
   SegmentedControl,
-  SelectionControlAndLabel,
   SideNavigation,
   Sidebar,
-  Stack,
-  Table,
-  Tabs,
-  Text,
-  TextArea,
   Tooltip,
   TopNavigation,
 } from '@earendil-works/elanor-react';
 import radiusCss from '@earendil-works/design-tokens/radius.css?url';
 import elanorCss from '@earendil-works/design-tokens/elanor.css?url';
 import lefosCss from '@earendil-works/design-tokens/lefos.css?url';
-import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
+import {useEffect, useState} from 'react';
 import {
   AccountCircleIcon,
-  AddIcon,
-  ArrowBackIcon,
-  AutoFixHighIcon,
   BorderClearIcon,
   BorderOuterIcon,
-  CloseIcon,
-  ContentCopyIcon,
   DarkModeIcon,
-  DeleteIcon,
-  DownloadIcon,
-  EditIcon,
-  FolderOpenIcon,
-  HelpIcon,
   HomeIcon,
   Inventory2Icon,
-  LayersIcon,
   LightModeIcon,
   PrintIcon,
-  RestartAltIcon,
   ScheduleIcon,
   SettingsIcon,
-  TuneIcon,
-  UndoIcon,
-  UploadFileIcon,
-  ViewInArIcon,
 } from './icons.ts';
-import {LayerPreview} from './LayerPreview.tsx';
-import {
-  applyOps,
-  bounds,
-  buildPositions,
-  describe,
-  editMesh,
-  parsePrompt,
-  toStl,
-  volume,
-  type Model,
-} from '@brim/core/model.ts';
+import {applyOps, describe, editMesh, finalize, parsePrompt, size, type Model} from '@brim/core/model.ts';
 import type {Current, Intent} from '@brim/core/intent.ts';
 import {
   materials as stockMaterials,
   printers as stockPrinters,
-  slice,
   type Material,
   type Printer,
-  type SliceResult,
   type SliceSettings,
 } from '@brim/core/slicer.ts';
-import {hms, Jobs, type Job} from './Jobs.tsx';
+import {Home} from './Home.tsx';
+import {Jobs, type Job} from './Jobs.tsx';
+import {Library} from './Library.tsx';
+import {NewPart, PartPage, sections} from './Part.tsx';
 import {Settings} from './Settings.tsx';
 import {AccountSettings, demoAccount, Login, type Account} from './Account.tsx';
 import {go, useRoute} from './route.ts';
 import {useStored} from './store.ts';
-import {meshFormats, parseMesh} from './mesh.ts';
-import {Viewer} from './Viewer.tsx';
+import {parseMesh} from './mesh.ts';
 import {
   count,
-  edited,
   itemsIn,
   projectsOf,
+  removePart,
   removeProject,
+  title,
   withProjects,
+  type Entry,
   type Note,
+  type Part,
   type Project,
   type Use,
 } from './library.ts';
-import {ProjectList, ProjectPage, ProjectPicker} from './Projects.tsx';
-
-const examples = [
-  'twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs',
-  'gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole',
-  'box 80 x 50 x 30 with 2mm walls and 6mm corners',
-  'keychain tag 50 x 20 x 3 with a hole',
-  '5 point star 60 wide, 6 thick',
-  'planter 90 wide 80 tall tapered',
-];
-const tweaks = [
-  'make it taller',
-  'thicker walls',
-  'more ribs',
-  'twist it more',
-  'scale to 80%',
-  'add a hole',
-  'low poly',
-  'no twist',
-];
-
-interface Entry {
-  prompt: string;
-  changes: Array<string>;
-  model: Model;
-}
-interface Part {
-  id: string;
-  name?: string;
-  description?: string; // user's own notes on what the part is for
-  thumb?: string; // webp data URL of the viewer
-  history: Array<Entry>;
-  edited?: number; // ms timestamp of the last design change or rename
-}
-
-const sections = ['design', 'refine', 'print'];
-const modelTitle = (m: Model) => (m.type === 'mesh' ? m.name : 'Untitled ' + m.spec.kind);
-const title = (p: Part) => p.name || modelTitle(p.history.at(-1)!.model);
+import {ProjectPage} from './Projects.tsx';
 
 // shortcut: imported meshes are not saved and thumbnails share the ~5 MB localStorage quota; move to IndexedDB if people import a lot or keep hundreds of parts.
 const storable = (ps: Array<Part>) =>
@@ -192,20 +109,13 @@ function useBorders() {
   return [borders, setBorders] as const;
 }
 
-const download = (data: BlobPart, name: string, type: string) => {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([data], {type}));
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
 /** Asks the dev server's LLM; undefined when none is configured or it fails, so callers use the regex parser. */
 async function askLlm(prompt: string, m?: Model): Promise<Intent | undefined> {
   const current: Current | undefined = !m
     ? undefined
     : m.type === 'param'
       ? m
-      : {type: 'mesh', name: m.name, size: ((b) => b[1].map((v, k) => v - b[0][k]))(bounds(m.positions))};
+      : {type: 'mesh', name: m.name, size: size(m.positions)};
   try {
     const r = await fetch('/api/intent', {
       method: 'POST',
@@ -231,7 +141,7 @@ async function resolve(prompt: string, m?: Model): Promise<Entry> {
     return {prompt, changes: [describe(intent.spec)], model: {type: 'param', spec: intent.spec}};
   }
   if (intent && m) {
-    return {prompt, ...applyOps(m, intent.ops)};
+    return {prompt, ...(await applyOps(m, intent.ops))};
   }
   if (!m) {
     const {spec, changes} = parsePrompt(prompt);
@@ -245,17 +155,15 @@ async function resolve(prompt: string, m?: Model): Promise<Entry> {
       model: {type: 'param', spec},
     };
   }
-  const {positions: p, changes} = editMesh(prompt, m.positions);
+  const r = await editMesh(prompt, m);
   return {
     prompt,
-    changes: changes.length
-      ? changes
+    changes: r.changes.length
+      ? r.changes
       : ['imported meshes support scale, taller, wider, flip, rotate and drilling a hole'],
-    model: {...m, positions: p},
+    model: r.model,
   };
 }
-
-const slug = (m: Model) => (m.type === 'mesh' ? m.name : m.spec.kind + '-' + Math.round(m.spec.width) + 'mm');
 
 export function App() {
   const {theme, setTheme, scheme, setScheme, applied} = useTheme();
@@ -311,10 +219,8 @@ export function App() {
     go('library/projects');
   };
   const section = sections.includes(route[2]) ? route[2] : undefined; // none: the part overview
-  const setSection = (s: string) => part && go(`part/${part.id}/${s}`);
-  const patch = (id: string, f: (p: Part) => Part) => setParts((ps) => ps.map((p) => (p.id === id ? f(p) : p)));
-  const edit = (f: (p: Part) => Part) => part && patch(part.id, (p) => ({...f(p), edited: Date.now()}));
-  const setHistory = (f: (h: Array<Entry>) => Array<Entry>) => edit((p) => ({...p, history: f(p.history)}));
+  const setPart = (id: string, f: (p: Part) => Part, touch?: boolean) =>
+    setParts((ps) => ps.map((p) => (p.id === id ? {...f(p), ...(touch && {edited: Date.now()})} : p)));
   const create = (p: Omit<Part, 'id' | 'edited'>, projectIds: Array<string> = []) => {
     // oxlint-disable-next-line react/purity -- event handler, not render
     const next = {...p, id: crypto.randomUUID(), edited: Date.now()};
@@ -328,8 +234,9 @@ export function App() {
     if (!part || !confirm(`Delete “${title(part)}”?${used} This cannot be undone.`)) {
       return;
     }
-    setParts((ps) => ps.filter((p) => p.id !== part.id));
-    setUses((us) => us.filter((u) => u.itemId !== part.id));
+    const r = removePart(part.id, {parts, uses});
+    setParts(r.parts);
+    setUses(r.uses);
     go('library');
   };
   const [settings, setSettings] = useStored<SliceSettings>('brim-slice', () => ({
@@ -346,39 +253,24 @@ export function App() {
     printer: printers[settings.printer] ? settings.printer : Object.keys(printers)[0],
     material: materials[settings.material] ? settings.material : Object.keys(materials)[0],
   };
-  const current = part?.history.at(-1);
-  const positions = useMemo(
-    () =>
-      !current
-        ? new Float32Array()
-        : current.model.type === 'param'
-          ? buildPositions(current.model.spec)
-          : current.model.positions,
-    // oxlint-disable-next-line react/preserve-manual-memoization -- React Compiler is not used; the memo keeps Viewer from rebuilding each render
-    [current],
-  );
   const printer = printers[sliceSettings.printer];
 
-  const generate = async (prompt: string) => {
-    const e = await resolve(prompt);
+  /** New design prompt (replaces the model, or creates a part) or a refinement of the current model. */
+  const onPrompt = async (prompt: string, refine: boolean) => {
+    const e = await resolve(prompt, refine ? part?.history.at(-1)?.model : undefined);
     if (part) {
-      setHistory((h) => [...h, e]);
+      setPart(part.id, (p) => ({...p, history: [...p.history, e]}), true);
     } else {
       create({history: [e]}, project ? [project.id] : []);
     }
   };
-  const refine = async (prompt: string) => {
-    const e = await resolve(prompt, current?.model);
-    setHistory((h) => [...h, e]);
-  };
   const upload = async (file: File, projectId?: string) => {
     try {
-      const p = parseMesh(file.name, await file.arrayBuffer());
-      const {positions: fixed} = editMesh('', p);
+      const positions = finalize(parseMesh(file.name, await file.arrayBuffer()));
       const entry: Entry = {
         prompt: `Imported ${file.name}`,
-        changes: [`${fixed.length / 9} triangles`],
-        model: {type: 'mesh', name: file.name.replace(/\.[^.]+$/, ''), positions: fixed},
+        changes: [`${positions.length / 9} triangles`],
+        model: {type: 'mesh', name: file.name.replace(/\.[^.]+$/, ''), positions},
       };
       create({history: [entry]}, projectId ? [projectId] : []);
     } catch (error) {
@@ -519,39 +411,20 @@ export function App() {
 
         <main className="main">
           {page === 'new' ? (
-            <NewPart project={project} onSubmit={generate} />
+            <NewPart project={project} onSubmit={(p) => onPrompt(p, false)} />
           ) : page === 'project' ? (
             project ? (
               <ProjectPage
                 key={project.id}
                 project={project}
+                parts={projectParts(project.id)}
                 notes={notes}
                 setNotes={setNotes}
-                partCount={projectParts(project.id).length}
-                parts={<PartList parts={projectParts(project.id)} />}
-                actions={
-                  <>
-                    <RenameButton
-                      key={project.id}
-                      what="project"
-                      name={project.name}
-                      onRename={(name) =>
-                        setProjects((ps) => ps.map((p) => (p.id === project.id ? {...p, name, edited: Date.now()} : p)))
-                      }
-                    />
-                    <Button hierarchy="secondary" iconStart={<DeleteIcon />} onClick={() => deleteProject(project)}>
-                      Delete
-                    </Button>
-                  </>
+                onRename={(name) =>
+                  setProjects((ps) => ps.map((p) => (p.id === project.id ? {...p, name, edited: Date.now()} : p)))
                 }
-                partActions={
-                  <>
-                    <UploadButton compact onFile={(f) => upload(f, project.id)} />
-                    <Button density="compact" iconStart={<AddIcon />} onClick={() => go(`new/${project.id}`)}>
-                      New part
-                    </Button>
-                  </>
-                }
+                onDelete={() => deleteProject(project)}
+                onUpload={(f) => upload(f, project.id)}
               />
             ) : (
               <EmptyState.Root>
@@ -583,7 +456,7 @@ export function App() {
               inUse={sliceSettings}
               route={route.slice(1)}
             />
-          ) : !part || !current ? (
+          ) : !part ? (
             page === 'part' ? (
               <EmptyState.Root>
                 <EmptyState.Body>
@@ -604,916 +477,55 @@ export function App() {
               <Library
                 tab={libraryTab}
                 parts={parts}
-                projectCount={projects.length}
+                projects={projects}
+                notes={notes}
+                uses={uses}
                 onUpload={(f) => upload(f)}
                 onNewProject={() => newProject()}
-                projects={
-                  <ProjectList
-                    projects={projects}
-                    parts={parts}
-                    notes={notes}
-                    uses={uses}
-                    onNewProject={() => newProject()}
-                  />
-                }
               />
             )
-          ) : section ? (
-            <Stack gap="xLarge" align="stretch">
-              <div>
-                <Button
-                  hierarchy="secondary"
-                  density="compact"
-                  iconStart={<ArrowBackIcon />}
-                  onClick={() => go(`part/${part.id}`)}
-                >
-                  {title(part)}
-                </Button>
-              </div>
-              <Grid.Root>
-                <Grid.Item span={{base: 'full', medium: 7}}>
-                  <Stack gap="small" align="stretch">
-                    <Viewer
-                      positions={positions}
-                      bed={[printer.bed[0], printer.bed[1]]}
-                      theme={applied}
-                      onSnapshot={(thumb) => patch(part.id, (p) => ({...p, thumb}))}
-                    />
-                    <ModelFacts positions={positions} printer={printer} />
-                  </Stack>
-                </Grid.Item>
-                <Grid.Item span={{base: 'full', medium: 5}}>
-                  <Tabs.Root value={section} onValueChange={(v) => setSection(v as string)}>
-                    <Tabs.List aria-label="Workflow" className="sections">
-                      <Tabs.Tab value="design">
-                        <AutoFixHighIcon />
-                        Design
-                      </Tabs.Tab>
-                      <Tabs.Tab value="refine">
-                        <TuneIcon />
-                        Refine
-                      </Tabs.Tab>
-                      <Tabs.Tab value="print">
-                        <PrintIcon />
-                        Print files
-                      </Tabs.Tab>
-                      <Tabs.Indicator className="sections-indicator" />
-                    </Tabs.List>
-                    <Tabs.Panel value="design" className="panel">
-                      <PromptBox
-                        key="design"
-                        label="Describe the part"
-                        placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
-                        action="Generate STL"
-                        icon={<AutoFixHighIcon />}
-                        chips={examples}
-                        onSubmit={(p) => generate(p).then(() => setSection('refine'))}
-                      />
-                    </Tabs.Panel>
-                    <Tabs.Panel value="refine" className="panel">
-                      <Stack gap="large" align="stretch">
-                        <PromptBox
-                          key="refine"
-                          label="What should change?"
-                          placeholder="e.g. 20% bigger, thicker walls, add a 3mm hole"
-                          action="Improve"
-                          icon={<TuneIcon />}
-                          chips={tweaks}
-                          onSubmit={refine}
-                        />
-                        <History
-                          history={part.history}
-                          onUndo={() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h))}
-                          onRestore={(i) =>
-                            setHistory((h) => [
-                              ...h,
-                              {...h[i], prompt: `Back to step ${i + 1}`, changes: [h[i].prompt]},
-                            ])
-                          }
-                        />
-                      </Stack>
-                    </Tabs.Panel>
-                    <Tabs.Panel value="print" className="panel">
-                      <PrintPanel
-                        theme={applied}
-                        positions={positions}
-                        settings={sliceSettings}
-                        setSettings={setSettings}
-                        printers={printers}
-                        materials={materials}
-                        name={slug(current.model)}
-                        onQueue={(r) => {
-                          const s = sliceSettings;
-                          setJobs((js) => [
-                            {
-                              id: crypto.randomUUID(),
-                              partId: part.id,
-                              part: title(part),
-                              printer: printers[s.printer].name,
-                              material: materials[s.material].name,
-                              layer: s.layer,
-                              infill: s.infill,
-                              seconds: r.seconds,
-                              grams: r.grams,
-                              at: Date.now(),
-                            },
-                            ...js,
-                          ]);
-                          go('jobs');
-                        }}
-                      />
-                    </Tabs.Panel>
-                  </Tabs.Root>
-                </Grid.Item>
-              </Grid.Root>
-            </Stack>
           ) : (
-            <Stack gap="xLarge" align="stretch">
-              {project && (
-                <div>
-                  <Button
-                    hierarchy="secondary"
-                    density="compact"
-                    iconStart={<ArrowBackIcon />}
-                    onClick={() => go(`project/${project.id}`)}
-                  >
-                    {project.name}
-                  </Button>
-                </div>
-              )}
-              <PageHeader.Root>
-                <PageHeader.Row>
-                  <PageHeader.Title level={1}>{title(part)}</PageHeader.Title>
-                  <PageHeader.Actions>
-                    <RenameButton
-                      key={part.id}
-                      what="part"
-                      name={title(part)}
-                      onRename={(name) => edit((p) => ({...p, name}))}
-                    />
-                    <Button hierarchy="secondary" iconStart={<ContentCopyIcon />} onClick={duplicate}>
-                      Duplicate
-                    </Button>
-                    <Button hierarchy="secondary" iconStart={<DeleteIcon />} onClick={remove}>
-                      Delete
-                    </Button>
-                  </PageHeader.Actions>
-                </PageHeader.Row>
-                <PageHeader.Description>
-                  {current.model.type === 'param'
-                    ? describe(current.model.spec)
-                    : `Imported mesh · ${size(positions)
-                        .map((v) => v.toFixed(0))
-                        .join(' × ')} mm`}
-                </PageHeader.Description>
-              </PageHeader.Root>
-
-              <Grid.Root>
-                <Grid.Item span={{base: 'full', medium: 7}}>
-                  <Viewer
-                    positions={positions}
-                    bed={[printer.bed[0], printer.bed[1]]}
-                    theme={applied}
-                    onSnapshot={(thumb) => patch(part.id, (p) => ({...p, thumb}))}
-                  />
-                </Grid.Item>
-                <Grid.Item span={{base: 'full', medium: 5}}>
-                  <Stack gap="large" align="stretch">
-                    <TextArea
-                      key={part.id}
-                      aria-label="Description"
-                      placeholder="What is it for, how it fits, what to watch when printing…"
-                      value={part.description ?? ''}
-                      onValueChange={(description) => patch(part.id, (p) => ({...p, description}))}
-                    />
-                    <Specs part={part} positions={positions} printer={printer} />
-                    <Stack direction="row" gap="small" wrap="wrap">
-                      <Button
-                        hierarchy="secondary"
-                        iconStart={<AutoFixHighIcon />}
-                        onClick={() => setSection('design')}
-                      >
-                        Design
-                      </Button>
-                      <Button hierarchy="secondary" iconStart={<TuneIcon />} onClick={() => setSection('refine')}>
-                        Refine
-                      </Button>
-                      <Button hierarchy="secondary" iconStart={<PrintIcon />} onClick={() => setSection('print')}>
-                        Print
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </Grid.Item>
-              </Grid.Root>
-
-              <Files positions={positions} name={slug(current.model)} />
-
-              <Stack gap="small" align="stretch">
-                <Stack direction="row" gap="auto" align="center">
-                  <Heading level={2} size={5}>
-                    Used in projects
-                  </Heading>
-                  <ProjectPicker
-                    value={partProjects}
-                    projects={projects}
-                    onChange={(ids) => setUses((us) => withProjects(part.id, ids, us))}
-                    onCreate={() => newProject(part.id)}
-                  />
-                </Stack>
-                {partProjects.length ? (
-                  <Stack direction="row" gap="medium" wrap="wrap">
-                    {projects
-                      .filter((p) => partProjects.includes(p.id))
-                      .map((p) => (
-                        <a key={p.id} href={`#/project/${p.id}`}>
-                          {p.name}
-                        </a>
-                      ))}
-                  </Stack>
-                ) : (
-                  <Text className="muted">Not used in any project yet.</Text>
-                )}
-              </Stack>
-            </Stack>
+            <PartPage
+              key={part.id}
+              part={part}
+              project={project}
+              projects={projects}
+              partProjects={partProjects}
+              section={section}
+              setPart={(f, touch) => setPart(part.id, f, touch)}
+              onPrompt={onPrompt}
+              onDuplicate={duplicate}
+              onDelete={remove}
+              onProjects={(ids) => setUses((us) => withProjects(part.id, ids, us))}
+              onNewProject={() => newProject(part.id)}
+              printers={printers}
+              materials={materials}
+              settings={sliceSettings}
+              setSettings={setSettings}
+              theme={applied}
+              onQueue={(r) => {
+                const s = sliceSettings;
+                setJobs((js) => [
+                  {
+                    id: crypto.randomUUID(),
+                    partId: part.id,
+                    part: title(part),
+                    printer: printers[s.printer].name,
+                    material: materials[s.material].name,
+                    layer: s.layer,
+                    infill: s.infill,
+                    seconds: r.seconds,
+                    grams: r.grams,
+                    at: Date.now(),
+                  },
+                  ...js,
+                ]);
+                go('jobs');
+              }}
+            />
           )}
         </main>
       </div>
     </>
-  );
-}
-
-const grams = (js: Array<Job>) => `${js.reduce((a, j) => a + j.grams, 0).toFixed(0)} g`;
-
-function Home({parts, projects, jobs}: {parts: Array<Part>; projects: Array<Project>; jobs: Array<Job>}) {
-  const queued = jobs.filter((j) => !j.outcome);
-  const printed = jobs.filter((j) => j.outcome === 'ok');
-  const failed = jobs.filter((j) => j.outcome === 'failed').length;
-  return (
-    <Stack gap="xLarge" align="stretch">
-      <PageHeader.Root>
-        <PageHeader.Row>
-          <PageHeader.Title level={1}>Home</PageHeader.Title>
-        </PageHeader.Row>
-      </PageHeader.Root>
-      <Grid.Root>
-        <Grid.Item span={4}>
-          <Card label="Parts" value={parts.length} description={count(projects.length, 'project')} />
-        </Grid.Item>
-        <Grid.Item span={4}>
-          <Card
-            label="Queued prints"
-            value={queued.length}
-            description={`${hms(queued.reduce((a, j) => a + j.seconds, 0))} · ${grams(queued)}`}
-          />
-        </Grid.Item>
-        <Grid.Item span={4}>
-          <Card
-            label="Printed"
-            value={printed.length}
-            description={`${grams(printed)} of filament${failed ? ` · ${failed} failed` : ''}`}
-          />
-        </Grid.Item>
-      </Grid.Root>
-      {/* TODO: decide what else belongs on Home. */}
-      <Text className="muted">More coming here — TODO: decide what else belongs on Home.</Text>
-    </Stack>
-  );
-}
-
-/** Parts and Projects, one tab at a time. Parts are the things; Projects only reference them. */
-function Library(props: {
-  tab: 'parts' | 'projects';
-  parts: Array<Part>;
-  projectCount: number;
-  projects: ReactNode;
-  onUpload: (f: File) => void;
-  onNewProject: () => void;
-}) {
-  const {tab, parts} = props;
-  return (
-    <Stack gap="xLarge" align="stretch">
-      <PageHeader.Root>
-        <PageHeader.Row>
-          <PageHeader.Title level={1}>Library</PageHeader.Title>
-          <PageHeader.Actions>
-            {tab === 'parts' ? (
-              <>
-                <UploadButton onFile={props.onUpload} />
-                <Button iconStart={<AddIcon />} onClick={() => go('new')}>
-                  New part
-                </Button>
-              </>
-            ) : (
-              <Button iconStart={<AddIcon />} onClick={props.onNewProject}>
-                New project
-              </Button>
-            )}
-          </PageHeader.Actions>
-        </PageHeader.Row>
-        <PageHeader.Description>
-          {tab === 'parts'
-            ? 'Parts are the printable things, each with its own design history. One part can be used in many projects.'
-            : 'Projects group parts and notes for something you are making. They point to parts, not copies: editing a part changes it in every project.'}
-        </PageHeader.Description>
-      </PageHeader.Root>
-      <Tabs.Root value={tab} onValueChange={(v) => go(v === 'parts' ? 'library' : 'library/projects')}>
-        <Tabs.List aria-label="Library" className="sections">
-          <Tabs.Tab value="parts">
-            <ViewInArIcon />
-            Parts ({parts.length})
-          </Tabs.Tab>
-          <Tabs.Tab value="projects">
-            <FolderOpenIcon />
-            Projects ({props.projectCount})
-          </Tabs.Tab>
-          <Tabs.Indicator className="sections-indicator" />
-        </Tabs.List>
-      </Tabs.Root>
-      {tab === 'projects' ? (
-        props.projects
-      ) : parts.length ? (
-        <PartList parts={parts} />
-      ) : (
-        <EmptyState.Root>
-          <EmptyState.Illustration>
-            <ViewInArIcon size={48} />
-          </EmptyState.Illustration>
-          <EmptyState.Body>
-            <EmptyState.Copy>
-              <EmptyState.Title level={2}>No parts yet</EmptyState.Title>
-              <EmptyState.Description>
-                Describe a part in plain words, or import an STL, 3MF or OBJ file.
-              </EmptyState.Description>
-            </EmptyState.Copy>
-            <EmptyState.Actions>
-              <Button iconStart={<AddIcon />} onClick={() => go('new')}>
-                New part
-              </Button>
-            </EmptyState.Actions>
-          </EmptyState.Body>
-        </EmptyState.Root>
-      )}
-    </Stack>
-  );
-}
-
-function PartList({parts}: {parts: Array<Part>}) {
-  const sorted = [...parts].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0));
-  return (
-    <ul className="model-list">
-      {sorted.map((p) => {
-        const m = p.history.at(-1)!.model;
-        const href = `#/part/${p.id}`;
-        return (
-          <li key={p.id}>
-            {/* Image link is a mouse shortcut; the title link is the one keyboard and screen reader users get. */}
-            <a href={href} className="card-link" tabIndex={-1} aria-hidden>
-              {p.thumb ? <img className="thumb" src={p.thumb} alt="" /> : <div className="thumb" />}
-            </a>
-            <Stack gap="xSmall" align="stretch">
-              <Heading level={3} size={5}>
-                <a href={href} className="card-link">
-                  {title(p)}
-                </a>
-              </Heading>
-              <Text className="muted">{m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved'}</Text>
-              <Text className="muted">
-                {[edited(p.edited), `${p.history.length} ${p.history.length === 1 ? 'step' : 'steps'}`]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Text>
-            </Stack>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function NewPart({project, onSubmit}: {project?: Project; onSubmit: (prompt: string) => Promise<void>}) {
-  return (
-    <Stack gap="xLarge" align="stretch">
-      <PageHeader.Root>
-        <PageHeader.Row>
-          <PageHeader.Title level={1}>New part</PageHeader.Title>
-        </PageHeader.Row>
-        <PageHeader.Description>
-          {project ? `In ${project.name}. ` : ''}Describe what you want to print, or start from an example.
-        </PageHeader.Description>
-      </PageHeader.Root>
-      <div className="editor">
-        <PromptBox
-          autoFocus
-          label="Describe the part"
-          placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
-          action="Generate part"
-          icon={<AutoFixHighIcon />}
-          chips={examples}
-          onSubmit={onSubmit}
-        />
-      </div>
-    </Stack>
-  );
-}
-
-function RenameButton({what, name, onRename}: {what: string; name: string; onRename: (name: string) => void}) {
-  const [value, setValue] = useState(name);
-  const [open, setOpen] = useState(false);
-  const save = () => value.trim() && (onRename(value.trim()), setOpen(false));
-  return (
-    <Modal.Root open={open} onOpenChange={(o) => (setOpen(o), setValue(name))}>
-      <Modal.Trigger render={<Button hierarchy="secondary" iconStart={<EditIcon />} />}>Rename</Modal.Trigger>
-      <Modal.Portal>
-        <Modal.Backdrop />
-        <Modal.Viewport>
-          <Modal.Popup>
-            <Modal.Title>Rename {what}</Modal.Title>
-            <Modal.Body>
-              <Field.Root name="name">
-                <Field.Label>Name</Field.Label>
-                <Input
-                  value={value}
-                  onValueChange={(v) => setValue(v)}
-                  onKeyDown={(e) => e.key === 'Enter' && save()}
-                />
-              </Field.Root>
-            </Modal.Body>
-            <Modal.Actions>
-              <Modal.Close render={<Button hierarchy="secondary" />}>Cancel</Modal.Close>
-              <Button disabled={!value.trim()} onClick={save}>
-                Save
-              </Button>
-            </Modal.Actions>
-          </Modal.Popup>
-        </Modal.Viewport>
-      </Modal.Portal>
-    </Modal.Root>
-  );
-}
-
-function UploadButton({onFile, compact}: {onFile: (f: File) => void; compact?: boolean}) {
-  const input = useRef<HTMLInputElement>(null);
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        accept={meshFormats}
-        hidden
-        onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
-      />
-      <Button
-        hierarchy="secondary"
-        density={compact ? 'compact' : undefined}
-        iconStart={<UploadFileIcon />}
-        onClick={() => input.current?.click()}
-      >
-        Import model
-      </Button>
-    </>
-  );
-}
-
-function PromptBox(props: {
-  autoFocus?: boolean;
-  label: string;
-  placeholder: string;
-  action: string;
-  icon: ReactNode;
-  chips: Array<string>;
-  onSubmit: (p: string) => Promise<void>;
-}) {
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-  const submit = (p: string) => {
-    if (!p.trim() || busy) {
-      return;
-    }
-    setBusy(true);
-    void props
-      .onSubmit(p.trim())
-      .then(() => setValue(''))
-      .finally(() => setBusy(false));
-  };
-  return (
-    <Stack gap="medium" align="stretch">
-      <Field.Root name="prompt">
-        <Field.Label>{props.label}</Field.Label>
-        <TextArea
-          autoFocus={props.autoFocus}
-          value={value}
-          placeholder={props.placeholder}
-          onValueChange={(v) => setValue(v)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              submit(value);
-            }
-          }}
-        />
-        <Field.Description>
-          Sizes in mm (cm and in work too). <KeyboardKey>⌘</KeyboardKey>
-          <KeyboardKey>↵</KeyboardKey> to submit.
-        </Field.Description>
-      </Field.Root>
-      <Stack direction="row" gap="small">
-        <Button iconStart={props.icon} disabled={!value.trim() || busy} onClick={() => submit(value)}>
-          {busy ? 'Thinking…' : props.action}
-        </Button>
-      </Stack>
-      <Stack direction="row" gap="xSmall" wrap="wrap">
-        {props.chips.map((c) => (
-          <Button key={c} hierarchy="secondary" density="compact" disabled={busy} onClick={() => submit(c)}>
-            {c}
-          </Button>
-        ))}
-      </Stack>
-    </Stack>
-  );
-}
-
-function History({
-  history,
-  onUndo,
-  onRestore,
-}: {
-  history: Array<Entry>;
-  onUndo: () => void;
-  onRestore: (i: number) => void;
-}) {
-  return (
-    <Stack gap="small" align="stretch">
-      <Stack direction="row" gap="auto" align="center">
-        <Heading level={2} size={5}>
-          History
-        </Heading>
-        <Button
-          hierarchy="secondary"
-          density="compact"
-          iconStart={<UndoIcon />}
-          disabled={history.length < 2}
-          onClick={onUndo}
-        >
-          Undo
-        </Button>
-      </Stack>
-      <ol className="history" reversed>
-        {history
-          .map((h, i) => ({h, i}))
-          .reverse()
-          .map(({h, i}) => (
-            <li key={i}>
-              <Stack direction="row" gap="auto" align="start">
-                <Stack gap="xSmall">
-                  <Text>
-                    <InlineCode>{h.prompt}</InlineCode>
-                  </Text>
-                  <Text className="muted">{h.changes.join(' · ')}</Text>
-                </Stack>
-                {i < history.length - 1 && (
-                  <Button
-                    hierarchy="secondary"
-                    density="compact"
-                    iconStart={<RestartAltIcon />}
-                    onClick={() => onRestore(i)}
-                  >
-                    Restore
-                  </Button>
-                )}
-              </Stack>
-            </li>
-          ))}
-      </ol>
-    </Stack>
-  );
-}
-
-const size = (positions: Float32Array) => ((b) => b[1].map((v, k) => v - b[0][k]))(bounds(positions));
-
-/** One line of geometry facts under the viewer; the size is in the page header. */
-function ModelFacts({positions, printer}: {positions: Float32Array; printer: Printer}) {
-  const fits = size(positions).every((v, k) => v <= printer.bed[k]);
-  return (
-    <Text className="muted">
-      <span className={fits ? undefined : 'negative'}>
-        {fits ? 'Fits' : 'Too big for'} the {printer.name} bed
-      </span>
-      {[
-        '',
-        `${(Math.abs(volume(positions)) / 1000).toFixed(1)} cm³`,
-        `${(positions.length / 9).toLocaleString()} triangles`,
-      ].join(' · ')}
-    </Text>
-  );
-}
-
-const bytes = (n: number) =>
-  n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 ** 2).toFixed(1)} MB`;
-
-/** The part's key facts, shown on its overview. */
-function Specs({part, positions, printer}: {part: Part; positions: Float32Array; printer: Printer}) {
-  const dims = size(positions);
-  const fits = dims.every((v, k) => v <= printer.bed[k]);
-  return (
-    <KeyValue.Grid>
-      <KeyValue.Key>Size</KeyValue.Key>
-      <KeyValue.Value>{dims.map((v) => v.toFixed(1)).join(' × ')} mm</KeyValue.Value>
-      <KeyValue.Key>Volume</KeyValue.Key>
-      <KeyValue.Value>{(Math.abs(volume(positions)) / 1000).toFixed(1)} cm³</KeyValue.Value>
-      <KeyValue.Key>Triangles</KeyValue.Key>
-      <KeyValue.Value>{(positions.length / 9).toLocaleString()}</KeyValue.Value>
-      <KeyValue.Key>Bed</KeyValue.Key>
-      <KeyValue.Value>
-        <span className={fits ? undefined : 'negative'}>
-          {fits ? 'Fits' : 'Too big for'} the {printer.name}
-        </span>
-      </KeyValue.Value>
-      <KeyValue.Key>History</KeyValue.Key>
-      <KeyValue.Value>
-        {[count(part.history.length, 'step'), edited(part.edited)].filter(Boolean).join(' · ')}
-      </KeyValue.Value>
-    </KeyValue.Grid>
-  );
-}
-
-/** The files a part can be downloaded as, with format and size. */
-// shortcut: only the STL is listed; add the original upload and sliced G-code once they are stored with the part.
-function Files({positions, name}: {positions: Float32Array; name: string}) {
-  const file = `${name}.stl`;
-  return (
-    <Stack gap="small" align="stretch">
-      <Heading level={2} size={5}>
-        Files
-      </Heading>
-      <Table.Container>
-        <Table.Root aria-label="Files">
-          <Table.Head>
-            <Table.Row>
-              <Table.HeaderCell scope="col">Name</Table.HeaderCell>
-              <Table.HeaderCell scope="col">Format</Table.HeaderCell>
-              <Table.HeaderCell scope="col">Size</Table.HeaderCell>
-              <Table.HeaderCell scope="col">
-                <span hidden>Actions</span>
-              </Table.HeaderCell>
-            </Table.Row>
-          </Table.Head>
-          <Table.Body>
-            <Table.Row>
-              <Table.Cell>{file}</Table.Cell>
-              <Table.Cell>STL (binary)</Table.Cell>
-              {/* Binary STL: 84-byte header plus 50 bytes per triangle. */}
-              <Table.Cell>{bytes(84 + (positions.length / 9) * 50)}</Table.Cell>
-              <Table.Cell align="end">
-                <IconButton
-                  aria-label={`Download ${file}`}
-                  onClick={() => download(toStl(positions), file, 'model/stl')}
-                >
-                  <DownloadIcon />
-                </IconButton>
-              </Table.Cell>
-            </Table.Row>
-          </Table.Body>
-        </Table.Root>
-      </Table.Container>
-    </Stack>
-  );
-}
-
-function PrintPanel({
-  theme,
-  positions,
-  settings,
-  setSettings,
-  printers,
-  materials,
-  name,
-  onQueue,
-}: {
-  theme: string;
-  positions: Float32Array;
-  settings: SliceSettings;
-  setSettings: (s: SliceSettings) => void;
-  printers: Record<string, Printer>;
-  materials: Record<string, Material>;
-  name: string;
-  onQueue: (r: SliceResult) => void;
-}) {
-  // A result is only valid for the inputs it was sliced from; anything else reads as null.
-  const [sliced, setSliced] = useState<{result: SliceResult; inputs: Array<object>} | null>(null);
-  const inputs = [positions, printers, materials];
-  const result = sliced?.inputs.every((v, i) => v === inputs[i]) ? sliced.result : null;
-  const setResult = (result: SliceResult | null) => setSliced(result && {result, inputs});
-  const [layer, setLayer] = useState(0);
-  const set = <K extends keyof SliceSettings>(k: K, v: SliceSettings[K]) => (
-    setSettings({...settings, [k]: v}),
-    setResult(null)
-  );
-  const [min, max] = bounds(positions);
-  const extent = Math.max(max[0] - min[0], max[1] - min[1]);
-  const bed = printers[settings.printer].bed;
-  const tooBig = max[0] - min[0] > bed[0] || max[1] - min[1] > bed[1] || max[2] - min[2] > bed[2];
-
-  const pick = (label: string, key: 'printer' | 'material', options: Record<string, {name: string}>) => (
-    <Dropdown.Root value={settings[key]} onValueChange={(v) => set(key, v as string)}>
-      <Stack gap="xSmall" align="stretch">
-        <Dropdown.Label>{label}</Dropdown.Label>
-        <Dropdown.Trigger>
-          <Dropdown.Value>{(v: string) => options[v].name}</Dropdown.Value>
-          <Dropdown.Icon />
-        </Dropdown.Trigger>
-      </Stack>
-      <Dropdown.Portal>
-        <Dropdown.Positioner>
-          <Dropdown.Popup>
-            <Dropdown.List>
-              {Object.entries(options).map(([k, o]) => (
-                <Dropdown.Item key={k} value={k}>
-                  {o.name}
-                </Dropdown.Item>
-              ))}
-            </Dropdown.List>
-          </Dropdown.Popup>
-        </Dropdown.Positioner>
-      </Dropdown.Portal>
-    </Dropdown.Root>
-  );
-
-  return (
-    <Stack gap="large" align="stretch">
-      <Grid.Root>
-        <Grid.Item span={6}>{pick('Printer', 'printer', printers)}</Grid.Item>
-        <Grid.Item span={6}>{pick('Material', 'material', materials)}</Grid.Item>
-      </Grid.Root>
-      <Stack gap="xSmall">
-        <Text>Layer height</Text>
-        <SegmentedControl.Root
-          aria-label="Layer height"
-          value={[String(settings.layer)]}
-          onValueChange={(v) => v[0] && set('layer', Number(v[0]))}
-        >
-          {['0.12', '0.2', '0.28'].map((l) => (
-            <SegmentedControl.Item key={l} value={l}>
-              {l} mm
-            </SegmentedControl.Item>
-          ))}
-        </SegmentedControl.Root>
-      </Stack>
-      <Stack gap="xSmall">
-        <Text>Infill</Text>
-        <SegmentedControl.Root
-          aria-label="Infill"
-          value={[String(settings.infill)]}
-          onValueChange={(v) => v[0] && set('infill', Number(v[0]))}
-        >
-          {['0', '15', '30', '60'].map((l) => (
-            <SegmentedControl.Item key={l} value={l}>
-              {l}%
-            </SegmentedControl.Item>
-          ))}
-        </SegmentedControl.Root>
-      </Stack>
-      <SelectionControlAndLabel
-        control={
-          <Checkbox.Root checked={settings.vase} onCheckedChange={(c) => set('vase', c)}>
-            <Checkbox.Indicator />
-          </Checkbox.Root>
-        }
-      >
-        Spiral vase mode (single wall, continuous Z)
-      </SelectionControlAndLabel>
-      <Stack direction="row" gap="small" align="center">
-        <Button
-          iconStart={<LayersIcon />}
-          disabled={tooBig}
-          onClick={() => {
-            const r = slice(positions, settings, printers[settings.printer], materials[settings.material]);
-            setResult(r);
-            setLayer(Math.floor(r.layers.length / 2));
-          }}
-        >
-          Slice
-        </Button>
-        {tooBig && <Text className="negative">Part is larger than the {printers[settings.printer].name} bed.</Text>}
-      </Stack>
-
-      {result ? (
-        <Stack gap="large" align="stretch">
-          <KeyValue.Grid>
-            <KeyValue.Key>Layers</KeyValue.Key>
-            <KeyValue.Value>{result.layers.length}</KeyValue.Value>
-            <KeyValue.Key>Print time</KeyValue.Key>
-            <KeyValue.Value>≈ {hms(result.seconds)}</KeyValue.Value>
-            <KeyValue.Key>Filament</KeyValue.Key>
-            <KeyValue.Value>
-              {(result.filamentMm / 1000).toFixed(2)} m · {result.grams.toFixed(1)} g
-            </KeyValue.Value>
-            <KeyValue.Key>Temps</KeyValue.Key>
-            <KeyValue.Value>
-              {materials[settings.material].nozzle} °C nozzle / {materials[settings.material].bed} °C bed
-            </KeyValue.Value>
-          </KeyValue.Grid>
-          <Meter.Root value={(result.grams / 1000) * 100} semantic={result.grams > 800 ? 'warning' : 'neutral'}>
-            <Stack gap="xSmall" align="stretch">
-              <Stack direction="row" gap="auto">
-                <Meter.Label>Of a 1 kg spool</Meter.Label>
-                <Meter.Value />
-              </Stack>
-              <Meter.Track>
-                <Meter.Indicator />
-              </Meter.Track>
-            </Stack>
-          </Meter.Root>
-          <Card>
-            <Stack gap="small" align="stretch">
-              <Stack direction="row" gap="auto" align="center">
-                <Text>
-                  Layer {layer + 1} / {result.layers.length} · z {result.layers[layer]?.z.toFixed(2)} mm
-                </Text>
-                <Tooltip.Root>
-                  <Tooltip.Trigger render={<IconButton aria-label="About the preview" />}>
-                    <HelpIcon />
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Positioner>
-                      <Tooltip.Popup>Walls in the accent colour, infill in grey</Tooltip.Popup>
-                    </Tooltip.Positioner>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Stack>
-              <input
-                type="range"
-                min={0}
-                max={result.layers.length - 1}
-                value={layer}
-                onChange={(e) => setLayer(e.currentTarget.valueAsNumber)}
-                aria-label="Layer"
-              />
-              <LayerPreview layer={result.layers[layer]} extent={extent} theme={theme} />
-            </Stack>
-          </Card>
-          <Stack direction="row" gap="small" wrap="wrap">
-            <Button iconStart={<ScheduleIcon />} onClick={() => onQueue(result)}>
-              Add to queue
-            </Button>
-            <Button
-              hierarchy="secondary"
-              iconStart={<DownloadIcon />}
-              onClick={() =>
-                download(result.gcode, `${name}_${settings.material}_${settings.layer}mm.gcode`, 'text/x-gcode')
-              }
-            >
-              Download G-code
-            </Button>
-            <Button
-              hierarchy="secondary"
-              iconStart={<DownloadIcon />}
-              onClick={() => download(toStl(positions), name + '.stl', 'model/stl')}
-            >
-              Download STL
-            </Button>
-            <GcodeModal gcode={result.gcode} />
-          </Stack>
-        </Stack>
-      ) : (
-        <EmptyState.Root>
-          <EmptyState.Illustration>
-            <LayersIcon size={48} />
-          </EmptyState.Illustration>
-          <EmptyState.Body>
-            <EmptyState.Copy>
-              <EmptyState.Title level={2}>Not sliced yet</EmptyState.Title>
-              <EmptyState.Description>
-                Pick a printer and material, then slice to get G-code and a layer preview.
-              </EmptyState.Description>
-            </EmptyState.Copy>
-          </EmptyState.Body>
-        </EmptyState.Root>
-      )}
-    </Stack>
-  );
-}
-
-function GcodeModal({gcode}: {gcode: string}) {
-  const head = gcode.split('\n').slice(0, 40).join('\n');
-  return (
-    <Modal.Root>
-      <Modal.Trigger render={<Button hierarchy="secondary" />}>View G-code</Modal.Trigger>
-      <Modal.Portal>
-        <Modal.Backdrop />
-        <Modal.Viewport>
-          <Modal.Popup>
-            <Stack direction="row" align="start" gap="auto">
-              <Modal.Title>G-code preview</Modal.Title>
-              <Modal.Close render={<IconButton aria-label="Close" />}>
-                <CloseIcon />
-              </Modal.Close>
-            </Stack>
-            <Modal.Description>First 40 of {gcode.split('\n').length.toLocaleString()} lines.</Modal.Description>
-            <Modal.Body>
-              <CodeSnippet actions={<CopyButton value={gcode} aria-label="Copy all G-code" />}>{head}</CodeSnippet>
-            </Modal.Body>
-          </Modal.Popup>
-        </Modal.Viewport>
-      </Modal.Portal>
-    </Modal.Root>
   );
 }

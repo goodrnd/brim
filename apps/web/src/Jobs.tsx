@@ -36,7 +36,7 @@ export interface Job {
 export type Outcome = 'ok' | 'failed';
 const outcomes = {queued: 'Queued', ok: 'Printed', failed: 'Failed'};
 
-export const hms = (s: number) => `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
+export const hms = (s: number) => ((m) => `${Math.floor(m / 60)} h ${m % 60} min`)(Math.round(s / 60));
 
 export function Jobs({
   jobs,

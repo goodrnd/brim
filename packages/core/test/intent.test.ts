@@ -49,7 +49,7 @@ void test('README prompts resolve to valid specs and ops', async () => {
       );
     } else {
       assert.equal(intent.type, 'ops', r.prompt);
-      const {changes} = applyOps(
+      const {changes} = await applyOps(
         r.current.type === 'param' ? r.current : {...r.current, positions: new Float32Array(9)},
         intent.type === 'ops' ? intent.ops : [],
       );
@@ -83,9 +83,9 @@ void test('bad tool calls are rejected, not applied', async () => {
   await assert.rejects(replay({prompt: 'x', content: [], stopReason: 'stop'}));
 });
 
-void test('mesh ops: rotate 180 about X flips, scale scales', () => {
+void test('mesh ops: rotate 180 about X flips, scale scales', async () => {
   const m = {type: 'mesh' as const, name: 't', positions: new Float32Array([0, 0, 0, 10, 0, 0, 0, 0, 10])};
-  const {model} = applyOps(m, [
+  const {model} = await applyOps(m, [
     {op: 'rotate', axis: 'x', degrees: 180},
     {op: 'scale', x: 2, y: 2, z: 2},
   ]);

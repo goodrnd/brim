@@ -20,12 +20,21 @@ export function useStored<T>(
     return fallback();
   });
   useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(toJson(value)));
-    } catch (error) {
-      // oxlint-disable-next-line no-console
-      console.warn(`Could not save ${key}`, error); // quota full; keeps working in memory
-    }
+    const save = () => {
+      try {
+        localStorage.setItem(key, JSON.stringify(toJson(value)));
+      } catch (error) {
+        // oxlint-disable-next-line no-console
+        console.warn(`Could not save ${key}`, error); // quota full; keeps working in memory
+      }
+    };
+    // Debounced so typing does not re-serialise every part per keystroke; pagehide flushes a pending save.
+    const timer = setTimeout(save, 300);
+    addEventListener('pagehide', save);
+    return () => {
+      clearTimeout(timer);
+      removeEventListener('pagehide', save);
+    };
   }, [key, value, toJson]);
   return [value, setValue];
 }
