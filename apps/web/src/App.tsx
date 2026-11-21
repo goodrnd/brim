@@ -22,6 +22,7 @@ import {
   SideNavigation,
   Sidebar,
   Stack,
+  Table,
   Tabs,
   Text,
   TextArea,
@@ -129,6 +130,7 @@ interface Entry {
 interface Part {
   id: string;
   name?: string;
+  description?: string; // user's own notes on what the part is for
   thumb?: string; // webp data URL of the viewer
   history: Array<Entry>;
   edited?: number; // ms timestamp of the last design change or rename
@@ -305,7 +307,7 @@ export function App() {
     setNotes(r.notes);
     go('projects');
   };
-  const section = sections.includes(route[2]) ? route[2] : 'design';
+  const section = sections.includes(route[2]) ? route[2] : undefined; // none: the part overview
   const setSection = (s: string) => part && go(`part/${part.id}/${s}`);
   const patch = (id: string, f: (p: Part) => Part) => setParts((ps) => ps.map((p) => (p.id === id ? f(p) : p)));
   const edit = (f: (p: Part) => Part) => part && patch(part.id, (p) => ({...f(p), edited: Date.now()}));
@@ -606,54 +608,18 @@ export function App() {
             ) : (
               <Library parts={parts} onUpload={(f) => upload(f)} />
             )
-          ) : (
+          ) : section ? (
             <Stack gap="xLarge" align="stretch">
-              {project && (
-                <div>
-                  <Button
-                    hierarchy="secondary"
-                    density="compact"
-                    iconStart={<ArrowBackIcon />}
-                    onClick={() => go(`project/${project.id}`)}
-                  >
-                    {project.name}
-                  </Button>
-                </div>
-              )}
-              <PageHeader.Root>
-                <PageHeader.Row>
-                  <PageHeader.Title level={1}>{title(part)}</PageHeader.Title>
-                  <PageHeader.Actions>
-                    <RenameButton
-                      key={part.id}
-                      what="part"
-                      name={title(part)}
-                      onRename={(name) => edit((p) => ({...p, name}))}
-                    />
-                    <Button hierarchy="secondary" iconStart={<ContentCopyIcon />} onClick={duplicate}>
-                      Duplicate
-                    </Button>
-                    <Button hierarchy="secondary" iconStart={<DeleteIcon />} onClick={remove}>
-                      Delete
-                    </Button>
-                    <Button
-                      hierarchy="secondary"
-                      iconStart={<DownloadIcon />}
-                      onClick={() => download(toStl(positions), slug(current.model) + '.stl', 'model/stl')}
-                    >
-                      STL
-                    </Button>
-                  </PageHeader.Actions>
-                </PageHeader.Row>
-                <PageHeader.Description>
-                  {current.model.type === 'param'
-                    ? describe(current.model.spec)
-                    : `Imported mesh · ${size(positions)
-                        .map((v) => v.toFixed(0))
-                        .join(' × ')} mm`}
-                </PageHeader.Description>
-              </PageHeader.Root>
-
+              <div>
+                <Button
+                  hierarchy="secondary"
+                  density="compact"
+                  iconStart={<ArrowBackIcon />}
+                  onClick={() => go(`part/${part.id}`)}
+                >
+                  {title(part)}
+                </Button>
+              </div>
               <Grid.Root>
                 <Grid.Item span={{base: 'full', medium: 7}}>
                   <Stack gap="small" align="stretch">
@@ -751,6 +717,87 @@ export function App() {
                   </Tabs.Root>
                 </Grid.Item>
               </Grid.Root>
+            </Stack>
+          ) : (
+            <Stack gap="xLarge" align="stretch">
+              {project && (
+                <div>
+                  <Button
+                    hierarchy="secondary"
+                    density="compact"
+                    iconStart={<ArrowBackIcon />}
+                    onClick={() => go(`project/${project.id}`)}
+                  >
+                    {project.name}
+                  </Button>
+                </div>
+              )}
+              <PageHeader.Root>
+                <PageHeader.Row>
+                  <PageHeader.Title level={1}>{title(part)}</PageHeader.Title>
+                  <PageHeader.Actions>
+                    <RenameButton
+                      key={part.id}
+                      what="part"
+                      name={title(part)}
+                      onRename={(name) => edit((p) => ({...p, name}))}
+                    />
+                    <Button hierarchy="secondary" iconStart={<ContentCopyIcon />} onClick={duplicate}>
+                      Duplicate
+                    </Button>
+                    <Button hierarchy="secondary" iconStart={<DeleteIcon />} onClick={remove}>
+                      Delete
+                    </Button>
+                  </PageHeader.Actions>
+                </PageHeader.Row>
+                <PageHeader.Description>
+                  {current.model.type === 'param'
+                    ? describe(current.model.spec)
+                    : `Imported mesh · ${size(positions)
+                        .map((v) => v.toFixed(0))
+                        .join(' × ')} mm`}
+                </PageHeader.Description>
+              </PageHeader.Root>
+
+              <Grid.Root>
+                <Grid.Item span={{base: 'full', medium: 7}}>
+                  <Viewer
+                    positions={positions}
+                    bed={[printer.bed[0], printer.bed[1]]}
+                    theme={applied}
+                    onSnapshot={(thumb) => patch(part.id, (p) => ({...p, thumb}))}
+                  />
+                </Grid.Item>
+                <Grid.Item span={{base: 'full', medium: 5}}>
+                  <Stack gap="large" align="stretch">
+                    <TextArea
+                      key={part.id}
+                      aria-label="Description"
+                      placeholder="What is it for, how it fits, what to watch when printing…"
+                      value={part.description ?? ''}
+                      onValueChange={(description) => patch(part.id, (p) => ({...p, description}))}
+                    />
+                    <Specs part={part} positions={positions} printer={printer} />
+                    <Stack direction="row" gap="small" wrap="wrap">
+                      <Button
+                        hierarchy="secondary"
+                        iconStart={<AutoFixHighIcon />}
+                        onClick={() => setSection('design')}
+                      >
+                        Design
+                      </Button>
+                      <Button hierarchy="secondary" iconStart={<TuneIcon />} onClick={() => setSection('refine')}>
+                        Refine
+                      </Button>
+                      <Button hierarchy="secondary" iconStart={<PrintIcon />} onClick={() => setSection('print')}>
+                        Print
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Grid.Item>
+              </Grid.Root>
+
+              <Files positions={positions} name={slug(current.model)} />
 
               <Stack gap="small" align="stretch">
                 <Stack direction="row" gap="auto" align="center">
@@ -866,7 +913,7 @@ function PartList({parts}: {parts: Array<Part>}) {
     <ul className="model-list">
       {sorted.map((p) => {
         const m = p.history.at(-1)!.model;
-        const href = `#/part/${p.id}/design`;
+        const href = `#/part/${p.id}`;
         return (
           <li key={p.id}>
             {/* Image link is a mouse shortcut; the title link is the one keyboard and screen reader users get. */}
@@ -1104,9 +1151,80 @@ function ModelFacts({positions, printer}: {positions: Float32Array; printer: Pri
         '',
         `${(Math.abs(volume(positions)) / 1000).toFixed(1)} cm³`,
         `${(positions.length / 9).toLocaleString()} triangles`,
-        `${((84 + (positions.length / 9) * 50) / 1024).toFixed(0)} KB STL`,
       ].join(' · ')}
     </Text>
+  );
+}
+
+const bytes = (n: number) =>
+  n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 ** 2).toFixed(1)} MB`;
+
+/** The part's key facts, shown on its overview. */
+function Specs({part, positions, printer}: {part: Part; positions: Float32Array; printer: Printer}) {
+  const dims = size(positions);
+  const fits = dims.every((v, k) => v <= printer.bed[k]);
+  return (
+    <KeyValue.Grid>
+      <KeyValue.Key>Size</KeyValue.Key>
+      <KeyValue.Value>{dims.map((v) => v.toFixed(1)).join(' × ')} mm</KeyValue.Value>
+      <KeyValue.Key>Volume</KeyValue.Key>
+      <KeyValue.Value>{(Math.abs(volume(positions)) / 1000).toFixed(1)} cm³</KeyValue.Value>
+      <KeyValue.Key>Triangles</KeyValue.Key>
+      <KeyValue.Value>{(positions.length / 9).toLocaleString()}</KeyValue.Value>
+      <KeyValue.Key>Bed</KeyValue.Key>
+      <KeyValue.Value>
+        <span className={fits ? undefined : 'negative'}>
+          {fits ? 'Fits' : 'Too big for'} the {printer.name}
+        </span>
+      </KeyValue.Value>
+      <KeyValue.Key>History</KeyValue.Key>
+      <KeyValue.Value>
+        {[count(part.history.length, 'step'), edited(part.edited)].filter(Boolean).join(' · ')}
+      </KeyValue.Value>
+    </KeyValue.Grid>
+  );
+}
+
+/** The files a part can be downloaded as, with format and size. */
+// shortcut: only the STL is listed; add the original upload and sliced G-code once they are stored with the part.
+function Files({positions, name}: {positions: Float32Array; name: string}) {
+  const file = `${name}.stl`;
+  return (
+    <Stack gap="small" align="stretch">
+      <Heading level={2} size={5}>
+        Files
+      </Heading>
+      <Table.Container>
+        <Table.Root aria-label="Files">
+          <Table.Head>
+            <Table.Row>
+              <Table.HeaderCell scope="col">Name</Table.HeaderCell>
+              <Table.HeaderCell scope="col">Format</Table.HeaderCell>
+              <Table.HeaderCell scope="col">Size</Table.HeaderCell>
+              <Table.HeaderCell scope="col">
+                <span hidden>Actions</span>
+              </Table.HeaderCell>
+            </Table.Row>
+          </Table.Head>
+          <Table.Body>
+            <Table.Row>
+              <Table.Cell>{file}</Table.Cell>
+              <Table.Cell>STL (binary)</Table.Cell>
+              {/* Binary STL: 84-byte header plus 50 bytes per triangle. */}
+              <Table.Cell>{bytes(84 + (positions.length / 9) * 50)}</Table.Cell>
+              <Table.Cell align="end">
+                <IconButton
+                  aria-label={`Download ${file}`}
+                  onClick={() => download(toStl(positions), file, 'model/stl')}
+                >
+                  <DownloadIcon />
+                </IconButton>
+              </Table.Cell>
+            </Table.Row>
+          </Table.Body>
+        </Table.Root>
+      </Table.Container>
+    </Stack>
   );
 }
 
