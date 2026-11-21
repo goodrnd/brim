@@ -25,7 +25,7 @@ Printer · Material         profiles
 - **Project**: a name, its Notes, and Uses of Library items.
 - **Use**: `{projectId, itemId, qty}` links a Project to a Part, File or Component. `qty` is how many to print or how many are needed; Files ignore it. One item can have Uses in many Projects.
 - **Note**: markdown body, always in one Project. Several small notes, not one document, so the user and agents can add without conflicts.
-- **Job**: a print queue entry: which Part, printer, material and settings, with the slicer's time and filament estimate. `outcome` is unset while queued, then `ok` or `failed` (with an optional `note`), set by a person. A printer reporting "finished" is not `ok`: firmware only knows its commands ran.
+- **Job**: one print of a Part, at `#/jobs` and `#/job/<id>`: which Part, printer, material and settings, with the slicer's time and filament estimate. `outcome` is unset while queued, then `ok` or `failed` (with an optional `note`), set by a person. A printer reporting "finished" is not `ok`: firmware only knows its commands ran.
 - **Printer**, **Material**: slicing profiles. Stock presets live in `@brim/core/slicer.ts`; users edit and add their own. A Printer is a profile; with a `serial` it is also that one physical printer. Identical printers are separate Printers (duplicate, then set each serial), so each can be addressed on its own. Serials are unique; "Reset to presets" keeps Printers that have one. A Bambu Printer also names its `bambuModel` (the `bambu_model` that [bambu-printer-mcp](https://dmontgomery40.github.io/bambu-printer-mcp/reference/printer-tools) takes); the printer's host, serial and access code stay in that server's env (`PRINTER_HOST`, `BAMBU_SERIAL`, `BAMBU_TOKEN`), never in Brim.
 
 ## Rules
@@ -36,6 +36,9 @@ Printer · Material         profiles
 - Only Notes belong to a Project. Deleting a Project deletes its Notes and Uses; Library items stay.
 - Deleting a Library item deletes its Uses; warn when it has any.
 - "Not used in any project" is a Library filter, not a separate place.
+- Jobs are history: never delete them in bulk. Removing one Job by hand is fine.
+- A Job's run has three separate facts: did the send reach the printer (`dispatch`), what the firmware reported (`run`), and is the part good (`outcome`). Only a person sets `outcome`; `cancelled` is not `failed`.
+- A Job is sent once. Printing again makes a new Job; resending after an `unconfirmed` dispatch can print twice.
 - Job is process-neutral on purpose; Printer stays "Printer". A second process (laser, CNC) gets its own profile type beside it, not a generic "Machine".
 
 ## Status
@@ -46,11 +49,27 @@ Next: Component. Planned with the backend: File, plus:
 
 - Entry gets `id`, `at` and `source` (`web` | `mcp`).
 - Mesh positions move to a hash-addressed blob store; today mesh entries are dropped on save.
-- Job references `entryId` and stores the printer and material it used, not only their names.
+- Job gets the shape below: it names the Entry and the exact file it printed, keeps the printer and spools it used, and copies the run from bambu-printer-mcp. The MCP keeps only its last ten flight records, so Brim is the long-term history.
+
+```ts
+Job {
+  id, partId, entryId, part            // part title when created
+  printerId, printer: {name, bambuModel}
+  filaments: [{slot, material, color}] // AMS mapping used
+  settings: {layer, infill}, estimate: {seconds, grams} // from the sent file, not our preview
+  artifact?: {sha256, plate}           // the .gcode.3mf sent; matches the MCP's record
+  createdAt
+  dispatch?: {at, recordId, status: 'unconfirmed' | 'accepted' | 'observed-active'}
+  run?: {state, startedAt?, endedAt?, problems: Array<string>} // copied when the print ends
+  outcome?: 'ok' | 'failed', note?     // a person decides
+}
+```
+
+Live progress (percent, layer, temperatures) is read from the printer, never stored.
 
 ## Open questions
 
-- Bambu printing (planned, via bambu-printer-mcp): send a Job as `print_3mf` with a slicer-made `.gcode.3mf` rather than our G-code, read status and AMS spools from `counterpart_print_progress` / `get_printer_filaments`, and fill Job outcome from `counterpart_print_record`. Firmware `finished` does not prove the part printed.
+- Bambu printing (planned, via bambu-printer-mcp): send a Job as `print_3mf` with a slicer-made `.gcode.3mf` rather than our G-code, read status and AMS spools from `counterpart_print_progress` / `get_printer_filaments`, and copy `counterpart_print_record` into the Job's `run` when the print ends. Firmware `finished` does not prove the part printed, so `outcome` stays a person's call.
 
 - MCP edits: change the Part in place (labelled by `source`) or work on a copy?
 - Job outcome beyond ok/failed (photos, measurements, camera frames from `counterpart_print_record`). Printed Parts kept as stock ("3 brackets in the drawer") would come from `ok` Jobs.

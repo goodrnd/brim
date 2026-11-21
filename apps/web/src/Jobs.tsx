@@ -3,13 +3,19 @@ import {
   Card,
   Dropdown,
   EmptyState,
+  Field,
   Grid,
+  Heading,
   IconButton,
+  KeyValue,
   PageHeader,
   Stack,
   Table,
+  Text,
+  TextArea,
 } from '@earendil-works/elanor-react';
-import {DeleteIcon, OpenInNewIcon, ScheduleIcon} from './icons.ts';
+import {ArrowBackIcon, DeleteIcon, OpenInNewIcon, ScheduleIcon} from './icons.ts';
+import {go} from './route.ts';
 
 export interface Job {
   id: string;
@@ -36,35 +42,32 @@ export function Jobs({
   jobs,
   setJobs,
   onOpen,
+  job: jobId,
 }: {
   jobs: Array<Job>;
   setJobs: (f: (j: Array<Job>) => Array<Job>) => void;
   onOpen?: (partId: string) => void;
+  /** Show this job's details instead of the list. */
+  job?: string;
 }) {
   const queued = jobs.filter((j) => !j.outcome);
   const failed = jobs.filter((j) => j.outcome === 'failed').length;
   const sum = (js: Array<Job>, k: 'seconds' | 'grams') => js.reduce((a, j) => a + j[k], 0);
   const update = (id: string, patch: Partial<Job> | null) =>
     setJobs((js) => (patch ? js.map((j) => (j.id === id ? {...j, ...patch} : j)) : js.filter((j) => j.id !== id)));
+  const job = jobId && jobs.find((j) => j.id === jobId);
+  if (job) {
+    return <JobDetail job={job} update={update} onOpen={onOpen} />;
+  }
 
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
         <PageHeader.Row>
-          <PageHeader.Title level={1}>Print queue</PageHeader.Title>
-          <PageHeader.Actions>
-            <Button
-              hierarchy="secondary"
-              iconStart={<DeleteIcon />}
-              disabled={jobs.length === queued.length}
-              onClick={() => setJobs((js) => js.filter((j) => !j.outcome))}
-            >
-              Clear finished
-            </Button>
-          </PageHeader.Actions>
+          <PageHeader.Title level={1}>Jobs</PageHeader.Title>
         </PageHeader.Row>
         <PageHeader.Description>
-          Sliced jobs you have queued. Mark each one printed or failed when it comes off the printer.
+          Every part you have sent to print. Mark each job printed or failed when it comes off the printer.
         </PageHeader.Description>
       </PageHeader.Root>
       <Grid.Root>
@@ -93,8 +96,87 @@ export function Jobs({
         </Grid.Item>
       </Grid.Root>
       {jobs.length ? (
+        <>
+          <JobTable title="Queued" jobs={queued} update={update} onOpen={onOpen} />
+          <JobTable title="History" jobs={jobs.filter((j) => j.outcome)} update={update} onOpen={onOpen} />
+        </>
+      ) : (
+        <EmptyState.Root>
+          <EmptyState.Illustration>
+            <ScheduleIcon size={48} />
+          </EmptyState.Illustration>
+          <EmptyState.Body>
+            <EmptyState.Copy>
+              <EmptyState.Title level={2}>No jobs yet</EmptyState.Title>
+              <EmptyState.Description>
+                Slice a part under Print files, then choose “Add to queue”.
+              </EmptyState.Description>
+            </EmptyState.Copy>
+          </EmptyState.Body>
+        </EmptyState.Root>
+      )}
+    </Stack>
+  );
+}
+
+type Update = (id: string, patch: Partial<Job> | null) => void;
+
+function OutcomeDropdown({job: j, update}: {job: Job; update: Update}) {
+  return (
+    <Dropdown.Root
+      value={j.outcome ?? 'queued'}
+      onValueChange={(v) =>
+        update(
+          j.id,
+          v === 'queued'
+            ? {outcome: undefined, note: undefined}
+            : {
+                outcome: v as Outcome,
+                note: v === 'failed' ? prompt('What went wrong? (optional)')?.trim() || undefined : undefined,
+              },
+        )
+      }
+    >
+      <Dropdown.Trigger aria-label={`Outcome of ${j.part}`} density="compact">
+        <Dropdown.Value>{(v: keyof typeof outcomes) => outcomes[v]}</Dropdown.Value>
+        <Dropdown.Icon />
+      </Dropdown.Trigger>
+      <Dropdown.Portal>
+        <Dropdown.Positioner>
+          <Dropdown.Popup>
+            <Dropdown.List>
+              {Object.entries(outcomes).map(([k, n]) => (
+                <Dropdown.Item key={k} value={k}>
+                  {n}
+                </Dropdown.Item>
+              ))}
+            </Dropdown.List>
+          </Dropdown.Popup>
+        </Dropdown.Positioner>
+      </Dropdown.Portal>
+    </Dropdown.Root>
+  );
+}
+
+function JobTable({
+  title,
+  jobs,
+  update,
+  onOpen,
+}: {
+  title: string;
+  jobs: Array<Job>;
+  update: Update;
+  onOpen?: (partId: string) => void;
+}) {
+  return (
+    <Stack gap="medium" align="stretch">
+      <Heading level={2} size={5}>
+        {title} ({jobs.length})
+      </Heading>
+      {jobs.length ? (
         <Table.Container>
-          <Table.Root aria-label="Print jobs">
+          <Table.Root aria-label={`${title} jobs`}>
             <Table.Head>
               <Table.Row>
                 <Table.HeaderCell scope="col">Outcome</Table.HeaderCell>
@@ -116,44 +198,12 @@ export function Jobs({
               {jobs.map((j) => (
                 <Table.Row key={j.id}>
                   <Table.Cell>
-                    <Dropdown.Root
-                      value={j.outcome ?? 'queued'}
-                      onValueChange={(v) =>
-                        update(
-                          j.id,
-                          v === 'queued'
-                            ? {outcome: undefined, note: undefined}
-                            : {
-                                outcome: v as Outcome,
-                                note:
-                                  v === 'failed'
-                                    ? prompt('What went wrong? (optional)')?.trim() || undefined
-                                    : undefined,
-                              },
-                        )
-                      }
-                    >
-                      <Dropdown.Trigger aria-label={`Outcome of ${j.part}`} density="compact">
-                        <Dropdown.Value>{(v: keyof typeof outcomes) => outcomes[v]}</Dropdown.Value>
-                        <Dropdown.Icon />
-                      </Dropdown.Trigger>
-                      <Dropdown.Portal>
-                        <Dropdown.Positioner>
-                          <Dropdown.Popup>
-                            <Dropdown.List>
-                              {Object.entries(outcomes).map(([k, n]) => (
-                                <Dropdown.Item key={k} value={k}>
-                                  {n}
-                                </Dropdown.Item>
-                              ))}
-                            </Dropdown.List>
-                          </Dropdown.Popup>
-                        </Dropdown.Positioner>
-                      </Dropdown.Portal>
-                    </Dropdown.Root>
+                    <OutcomeDropdown job={j} update={update} />
                   </Table.Cell>
                   <Table.Cell>
-                    <Table.CellPrimary>{j.part}</Table.CellPrimary>
+                    <Table.CellPrimary>
+                      <a href={`#/job/${j.id}`}>{j.part}</a>
+                    </Table.CellPrimary>
                     <Table.CellSecondary>
                       {new Date(j.at).toLocaleString()}
                       {j.note && ` · ${j.note}`}
@@ -183,19 +233,63 @@ export function Jobs({
           </Table.Root>
         </Table.Container>
       ) : (
-        <EmptyState.Root>
-          <EmptyState.Illustration>
-            <ScheduleIcon size={48} />
-          </EmptyState.Illustration>
-          <EmptyState.Body>
-            <EmptyState.Copy>
-              <EmptyState.Title level={2}>Nothing queued</EmptyState.Title>
-              <EmptyState.Description>
-                Slice a part under Print files, then choose “Add to queue”.
-              </EmptyState.Description>
-            </EmptyState.Copy>
-          </EmptyState.Body>
-        </EmptyState.Root>
+        <Text className="muted">None.</Text>
+      )}
+    </Stack>
+  );
+}
+
+function JobDetail({job: j, update, onOpen}: {job: Job; update: Update; onOpen?: (partId: string) => void}) {
+  return (
+    <Stack gap="xLarge" align="stretch">
+      <div>
+        <Button hierarchy="secondary" density="compact" iconStart={<ArrowBackIcon />} onClick={() => go('jobs')}>
+          Jobs
+        </Button>
+      </div>
+      <PageHeader.Root>
+        <PageHeader.Row>
+          <PageHeader.Title level={1}>{j.part}</PageHeader.Title>
+          <PageHeader.Actions>
+            {onOpen && (
+              <Button hierarchy="secondary" iconStart={<OpenInNewIcon />} onClick={() => onOpen(j.partId)}>
+                Open part
+              </Button>
+            )}
+            <Button hierarchy="secondary" iconStart={<DeleteIcon />} onClick={() => (update(j.id, null), go('jobs'))}>
+              Remove
+            </Button>
+          </PageHeader.Actions>
+        </PageHeader.Row>
+        <PageHeader.Description>Queued {new Date(j.at).toLocaleString()}</PageHeader.Description>
+      </PageHeader.Root>
+      <KeyValue.Grid>
+        <KeyValue.Key>Outcome</KeyValue.Key>
+        <KeyValue.Value>
+          <OutcomeDropdown job={j} update={update} />
+        </KeyValue.Value>
+        <KeyValue.Key>Printer</KeyValue.Key>
+        <KeyValue.Value>{j.printer}</KeyValue.Value>
+        <KeyValue.Key>Material</KeyValue.Key>
+        <KeyValue.Value>{j.material}</KeyValue.Value>
+        <KeyValue.Key>Layer height</KeyValue.Key>
+        <KeyValue.Value>{j.layer} mm</KeyValue.Value>
+        <KeyValue.Key>Infill</KeyValue.Key>
+        <KeyValue.Value>{j.infill}%</KeyValue.Value>
+        <KeyValue.Key>Estimated time</KeyValue.Key>
+        <KeyValue.Value>{hms(j.seconds)}</KeyValue.Value>
+        <KeyValue.Key>Filament</KeyValue.Key>
+        <KeyValue.Value>{j.grams.toFixed(1)} g</KeyValue.Value>
+      </KeyValue.Grid>
+      {j.outcome && (
+        <Field.Root name="note">
+          <Field.Label>Note</Field.Label>
+          <TextArea
+            placeholder={j.outcome === 'failed' ? 'What went wrong?' : 'How did it come out?'}
+            value={j.note ?? ''}
+            onValueChange={(note) => update(j.id, {note: note || undefined})}
+          />
+        </Field.Root>
       )}
     </Stack>
   );

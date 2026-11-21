@@ -270,7 +270,8 @@ export function App() {
   const [notes, setNotes] = useStored<Array<Note>>('brim-notes', () => []);
   const [uses, setUses] = useStored<Array<Use>>('brim-uses', () => []);
   const route = useRoute();
-  const page = route[0] === 'model' ? 'part' : (route[0] ?? 'home'); // old #/model/ links still open
+  // Old #/model/ and #/queue links still open.
+  const page = route[0] === 'model' ? 'part' : route[0] === 'queue' ? 'jobs' : (route[0] ?? 'home');
   const part = page === 'part' ? parts.find((p) => p.id === route[1]) : undefined;
   const partProjects = part ? projectsOf(part.id, uses).filter((id) => projects.some((p) => p.id === id)) : [];
   // A part page links back to its project only when there is just one.
@@ -464,8 +465,8 @@ export function App() {
                         ['projects', 'Projects', FolderOpenIcon],
                         ['library', 'Library', Inventory2Icon],
                         [
-                          'queue',
-                          `Print queue${jobs.some((j) => !j.outcome) ? ` (${jobs.filter((j) => !j.outcome).length})` : ''}`,
+                          'jobs',
+                          `Jobs${jobs.some((j) => !j.outcome) ? ` (${jobs.filter((j) => !j.outcome).length})` : ''}`,
                           ScheduleIcon,
                         ],
                         ['settings', 'Printers & materials', SettingsIcon],
@@ -477,6 +478,7 @@ export function App() {
                           iconStart={<Icon />}
                           active={
                             page === v ||
+                            (v === 'jobs' && page === 'job') ||
                             (v === 'projects' && (page === 'project' || (page === 'new' && !!route[1]))) ||
                             (v === 'library' && (page === 'part' || (page === 'new' && !route[1])))
                           }
@@ -563,11 +565,12 @@ export function App() {
                 </EmptyState.Body>
               </EmptyState.Root>
             )
-          ) : page === 'queue' ? (
+          ) : page === 'jobs' || page === 'job' ? (
             <Jobs
               jobs={jobs}
               setJobs={setJobs}
               onOpen={(id) => parts.some((p) => p.id === id) && go(`part/${id}/print`)}
+              job={page === 'job' ? route[1] : undefined}
             />
           ) : page === 'account' ? (
             <AccountSettings account={account} setAccount={setAccount} onLogout={() => (setSignedIn(false), go(''))} />
@@ -709,7 +712,7 @@ export function App() {
                             },
                             ...js,
                           ]);
-                          go('queue');
+                          go('jobs');
                         }}
                       />
                     </Tabs.Panel>
