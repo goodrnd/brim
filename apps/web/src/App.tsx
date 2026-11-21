@@ -465,7 +465,7 @@ export function App() {
                         ['library', 'Library', Inventory2Icon],
                         [
                           'queue',
-                          `Print queue${jobs.some((j) => !j.done) ? ` (${jobs.filter((j) => !j.done).length})` : ''}`,
+                          `Print queue${jobs.some((j) => !j.outcome) ? ` (${jobs.filter((j) => !j.outcome).length})` : ''}`,
                           ScheduleIcon,
                         ],
                         ['settings', 'Printers & materials', SettingsIcon],
@@ -706,7 +706,6 @@ export function App() {
                               seconds: r.seconds,
                               grams: r.grams,
                               at: Date.now(),
-                              done: false,
                             },
                             ...js,
                           ]);
@@ -836,8 +835,9 @@ export function App() {
 const grams = (js: Array<Job>) => `${js.reduce((a, j) => a + j.grams, 0).toFixed(0)} g`;
 
 function Home({parts, projects, jobs}: {parts: Array<Part>; projects: Array<Project>; jobs: Array<Job>}) {
-  const queued = jobs.filter((j) => !j.done);
-  const printed = jobs.filter((j) => j.done);
+  const queued = jobs.filter((j) => !j.outcome);
+  const printed = jobs.filter((j) => j.outcome === 'ok');
+  const failed = jobs.filter((j) => j.outcome === 'failed').length;
   return (
     <Stack gap="xLarge" align="stretch">
       <PageHeader.Root>
@@ -857,7 +857,11 @@ function Home({parts, projects, jobs}: {parts: Array<Part>; projects: Array<Proj
           />
         </Grid.Item>
         <Grid.Item span={4}>
-          <Card label="Printed" value={printed.length} description={`${grams(printed)} of filament`} />
+          <Card
+            label="Printed"
+            value={printed.length}
+            description={`${grams(printed)} of filament${failed ? ` · ${failed} failed` : ''}`}
+          />
         </Grid.Item>
       </Grid.Root>
       {/* TODO: decide what else belongs on Home. */}

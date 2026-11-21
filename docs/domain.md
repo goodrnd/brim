@@ -25,8 +25,8 @@ Printer · Material         profiles
 - **Project**: a name, its Notes, and Uses of Library items.
 - **Use**: `{projectId, itemId, qty}` links a Project to a Part, File or Component. `qty` is how many to print or how many are needed; Files ignore it. One item can have Uses in many Projects.
 - **Note**: markdown body, always in one Project. Several small notes, not one document, so the user and agents can add without conflicts.
-- **Job**: a print queue entry: which Part, printer, material and settings, with the slicer's time and filament estimate.
-- **Printer**, **Material**: slicing profiles. Stock presets live in `@brim/core/slicer.ts`; users edit and add their own. A Printer is a profile, not a physical device.
+- **Job**: a print queue entry: which Part, printer, material and settings, with the slicer's time and filament estimate. `outcome` is unset while queued, then `ok` or `failed` (with an optional `note`), set by a person. A printer reporting "finished" is not `ok`: firmware only knows its commands ran.
+- **Printer**, **Material**: slicing profiles. Stock presets live in `@brim/core/slicer.ts`; users edit and add their own. A Printer is a profile; with a `serial` it is also that one physical printer. Identical printers are separate Printers (duplicate, then set each serial), so each can be addressed on its own. Serials are unique; "Reset to presets" keeps Printers that have one. A Bambu Printer also names its `bambuModel` (the `bambu_model` that [bambu-printer-mcp](https://dmontgomery40.github.io/bambu-printer-mcp/reference/printer-tools) takes); the printer's host, serial and access code stay in that server's env (`PRINTER_HOST`, `BAMBU_SERIAL`, `BAMBU_TOKEN`), never in Brim.
 
 ## Rules
 
@@ -50,8 +50,11 @@ Next: Component. Planned with the backend: File, plus:
 
 ## Open questions
 
+- Bambu printing (planned, via bambu-printer-mcp): send a Job as `print_3mf` with a slicer-made `.gcode.3mf` rather than our G-code, read status and AMS spools from `counterpart_print_progress` / `get_printer_filaments`, and fill Job outcome from `counterpart_print_record`. Firmware `finished` does not prove the part printed.
+
 - MCP edits: change the Part in place (labelled by `source`) or work on a copy?
-- Job outcome (success or failure, photos, measurements): add now or later? Printed Parts kept as stock ("3 brackets in the drawer") would come from here.
+- Job outcome beyond ok/failed (photos, measurements, camera frames from `counterpart_print_record`). Printed Parts kept as stock ("3 brackets in the drawer") would come from `ok` Jobs.
+- Spools: read live from the printer, never stored; a Job keeps the ones it used.
 - A Use pinned to one Entry, so a Project can hold an older version of a Part.
 - Project parameters and relations between Parts (lid fits box): the next expansion.
 - If inventory grows (storage locations, suppliers, reorder levels), it becomes its own Inventory area beside the Library.

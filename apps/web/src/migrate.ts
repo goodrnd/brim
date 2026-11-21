@@ -40,4 +40,13 @@ export function migrate(s: Storage) {
   } catch {
     // broken JSON: useStored falls back to defaults
   }
+  // Job.done → Job.outcome; old ticks meant "printed fine".
+  try {
+    const jobs = JSON.parse(s.getItem('brim-jobs') ?? 'null');
+    if (Array.isArray(jobs) && jobs.some((j) => 'done' in j)) {
+      s.setItem('brim-jobs', JSON.stringify(jobs.map(({done, ...j}) => (done ? {...j, outcome: 'ok'} : j))));
+    }
+  } catch {
+    // broken JSON: useStored falls back to defaults
+  }
 }

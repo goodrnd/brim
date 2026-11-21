@@ -1,7 +1,7 @@
 import {
   Button,
   Card,
-  Checkbox,
+  Dropdown,
   EmptyState,
   Grid,
   IconButton,
@@ -22,8 +22,13 @@ export interface Job {
   seconds: number;
   grams: number;
   at: number;
-  done: boolean;
+  /** Unset while queued. Firmware "finished" is not `ok`; a person decides. */
+  outcome?: Outcome;
+  note?: string;
 }
+
+export type Outcome = 'ok' | 'failed';
+const outcomes = {queued: 'Queued', ok: 'Printed', failed: 'Failed'};
 
 export const hms = (s: number) => `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
 
@@ -36,7 +41,8 @@ export function Jobs({
   setJobs: (f: (j: Array<Job>) => Array<Job>) => void;
   onOpen?: (partId: string) => void;
 }) {
-  const queued = jobs.filter((j) => !j.done);
+  const queued = jobs.filter((j) => !j.outcome);
+  const failed = jobs.filter((j) => j.outcome === 'failed').length;
   const sum = (js: Array<Job>, k: 'seconds' | 'grams') => js.reduce((a, j) => a + j[k], 0);
   const update = (id: string, patch: Partial<Job> | null) =>
     setJobs((js) => (patch ? js.map((j) => (j.id === id ? {...j, ...patch} : j)) : js.filter((j) => j.id !== id)));
@@ -51,17 +57,23 @@ export function Jobs({
               hierarchy="secondary"
               iconStart={<DeleteIcon />}
               disabled={jobs.length === queued.length}
-              onClick={() => setJobs((js) => js.filter((j) => !j.done))}
+              onClick={() => setJobs((js) => js.filter((j) => !j.outcome))}
             >
-              Clear printed
+              Clear finished
             </Button>
           </PageHeader.Actions>
         </PageHeader.Row>
-        <PageHeader.Description>Sliced jobs you have queued. Tick them off once printed.</PageHeader.Description>
+        <PageHeader.Description>
+          Sliced jobs you have queued. Mark each one printed or failed when it comes off the printer.
+        </PageHeader.Description>
       </PageHeader.Root>
       <Grid.Root>
         <Grid.Item span={{base: 6, medium: 3}}>
-          <Card label="Queued" value={queued.length} description={`${jobs.length - queued.length} printed`} />
+          <Card
+            label="Queued"
+            value={queued.length}
+            description={`${jobs.length - queued.length - failed} printed · ${failed} failed`}
+          />
         </Grid.Item>
         <Grid.Item span={{base: 6, medium: 3}}>
           <Card label="Queue time" value={hms(sum(queued, 'seconds'))} description="Estimated" />
@@ -73,10 +85,10 @@ export function Jobs({
           <Card
             label="Filament used"
             value={`${sum(
-              jobs.filter((j) => j.done),
+              jobs.filter((j) => j.outcome),
               'grams',
             ).toFixed(0)} g`}
-            description="All printed jobs"
+            description="Printed and failed jobs"
           />
         </Grid.Item>
       </Grid.Root>
@@ -85,7 +97,7 @@ export function Jobs({
           <Table.Root aria-label="Print jobs">
             <Table.Head>
               <Table.Row>
-                <Table.HeaderCell scope="col">Printed</Table.HeaderCell>
+                <Table.HeaderCell scope="col">Outcome</Table.HeaderCell>
                 <Table.HeaderCell scope="col">Part</Table.HeaderCell>
                 <Table.HeaderCell scope="col">Printer</Table.HeaderCell>
                 <Table.HeaderCell scope="col">Settings</Table.HeaderCell>
@@ -104,17 +116,48 @@ export function Jobs({
               {jobs.map((j) => (
                 <Table.Row key={j.id}>
                   <Table.Cell>
-                    <Checkbox.Root
-                      aria-label={`Mark ${j.part} printed`}
-                      checked={j.done}
-                      onCheckedChange={(done) => update(j.id, {done})}
+                    <Dropdown.Root
+                      value={j.outcome ?? 'queued'}
+                      onValueChange={(v) =>
+                        update(
+                          j.id,
+                          v === 'queued'
+                            ? {outcome: undefined, note: undefined}
+                            : {
+                                outcome: v as Outcome,
+                                note:
+                                  v === 'failed'
+                                    ? prompt('What went wrong? (optional)')?.trim() || undefined
+                                    : undefined,
+                              },
+                        )
+                      }
                     >
-                      <Checkbox.Indicator />
-                    </Checkbox.Root>
+                      <Dropdown.Trigger aria-label={`Outcome of ${j.part}`} density="compact">
+                        <Dropdown.Value>{(v: keyof typeof outcomes) => outcomes[v]}</Dropdown.Value>
+                        <Dropdown.Icon />
+                      </Dropdown.Trigger>
+                      <Dropdown.Portal>
+                        <Dropdown.Positioner>
+                          <Dropdown.Popup>
+                            <Dropdown.List>
+                              {Object.entries(outcomes).map(([k, n]) => (
+                                <Dropdown.Item key={k} value={k}>
+                                  {n}
+                                </Dropdown.Item>
+                              ))}
+                            </Dropdown.List>
+                          </Dropdown.Popup>
+                        </Dropdown.Positioner>
+                      </Dropdown.Portal>
+                    </Dropdown.Root>
                   </Table.Cell>
                   <Table.Cell>
                     <Table.CellPrimary>{j.part}</Table.CellPrimary>
-                    <Table.CellSecondary>{new Date(j.at).toLocaleString()}</Table.CellSecondary>
+                    <Table.CellSecondary>
+                      {new Date(j.at).toLocaleString()}
+                      {j.note && ` · ${j.note}`}
+                    </Table.CellSecondary>
                   </Table.Cell>
                   <Table.Cell>{j.printer}</Table.Cell>
                   <Table.Cell>

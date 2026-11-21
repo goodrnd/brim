@@ -2,12 +2,37 @@ import {bounds} from './model.ts';
 
 // shortcut: one perimeter + scanline infill, solid only on the first/last layers, no supports or bridging; hand real prints to PrusaSlicer/Orca via the STL when quality matters.
 
+/** `bambu_model` values bambu-printer-mcp accepts; it refuses to guess one, and a wrong one can damage hardware. */
+export const bambuModels = {
+  a1: 'A1',
+  a1mini: 'A1 mini',
+  p1p: 'P1P',
+  p1s: 'P1S',
+  p2s: 'P2S',
+  x1c: 'X1 Carbon',
+  x1e: 'X1E',
+  h2s: 'H2S',
+  h2d: 'H2D',
+  h2dpro: 'H2D Pro',
+  h2c: 'H2C',
+  x2d: 'X2D',
+} as const;
+export type BambuModel = keyof typeof bambuModels;
+
 export interface Printer {
   name: string;
   bed: [number, number, number];
   start: string;
   end: string;
+  /** Set for Bambu printers driven through bambu-printer-mcp. */
+  bambuModel?: BambuModel;
+  /** Set when this Printer is one physical printer; identical printers are separate Printers. */
+  serial?: string;
 }
+
+// Bambu firmware runs its own calibration; our G-code is only for upload_gcode. Prefer print_3mf with a slicer-made 3MF.
+const bambuStart = 'G28 ; home\nG1 Z5 F3000';
+const bambuEnd = 'G1 Z+10 F600\nM84';
 
 export const printers = {
   mk4: {
@@ -29,6 +54,11 @@ export const printers = {
     start: 'PRINT_START BED={bed} EXTRUDER={nozzle}',
     end: 'PRINT_END',
   },
+  p1s: {name: 'Bambu Lab P1S', bed: [256, 256, 256], start: bambuStart, end: bambuEnd, bambuModel: 'p1s'},
+  x1c: {name: 'Bambu Lab X1 Carbon', bed: [256, 256, 256], start: bambuStart, end: bambuEnd, bambuModel: 'x1c'},
+  a1: {name: 'Bambu Lab A1', bed: [256, 256, 256], start: bambuStart, end: bambuEnd, bambuModel: 'a1'},
+  a1mini: {name: 'Bambu Lab A1 mini', bed: [180, 180, 180], start: bambuStart, end: bambuEnd, bambuModel: 'a1mini'},
+  h2d: {name: 'Bambu Lab H2D', bed: [325, 320, 325], start: bambuStart, end: bambuEnd, bambuModel: 'h2d'},
 } satisfies Record<string, Printer>;
 
 export interface Material {

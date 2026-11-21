@@ -20,7 +20,7 @@ void test('moves brim-models to brim-parts and renames job fields', () => {
   migrate(s);
   assert.equal(s.m.get('brim-parts'), '[{"id":"a"}]');
   assert.equal(s.m.has('brim-models'), false);
-  assert.deepEqual(JSON.parse(s.m.get('brim-jobs')!), [{id: 'j', done: false, partId: 'a', part: 'Box'}]);
+  assert.deepEqual(JSON.parse(s.m.get('brim-jobs')!), [{id: 'j', partId: 'a', part: 'Box'}]);
   const after = new Map(s.m);
   migrate(s);
   assert.deepEqual(s.m, after, 'second run is a no-op');
@@ -41,4 +41,23 @@ void test('never overwrites existing parts and survives broken jobs', () => {
   migrate(s);
   assert.equal(s.m.get('brim-parts'), '[{"id":"new"}]');
   assert.equal(s.m.get('brim-jobs'), '{oops');
+});
+
+void test('turns Job.done into outcome', () => {
+  const s = store({
+    'brim-jobs': JSON.stringify([
+      {id: 'a', done: true},
+      {id: 'b', done: false},
+      {id: 'c', outcome: 'failed'},
+    ]),
+  });
+  migrate(s);
+  assert.deepEqual(JSON.parse(s.m.get('brim-jobs')!), [
+    {id: 'a', outcome: 'ok'},
+    {id: 'b'},
+    {id: 'c', outcome: 'failed'},
+  ]);
+  const after = new Map(s.m);
+  migrate(s);
+  assert.deepEqual(s.m, after, 'second run is a no-op');
 });

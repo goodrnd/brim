@@ -1,5 +1,6 @@
 import {
   Button,
+  Dropdown,
   Field,
   Grid,
   Heading,
@@ -12,11 +13,13 @@ import {
   TextArea,
 } from '@earendil-works/elanor-react';
 import {useState, type ReactNode} from 'react';
-import {AddIcon, ArrowBackIcon, DeleteIcon, EditIcon, RestartAltIcon} from './icons.ts';
+import {AddIcon, ArrowBackIcon, ContentCopyIcon, DeleteIcon, EditIcon, RestartAltIcon} from './icons.ts';
 import {go} from './route.ts';
 import {
+  bambuModels,
   materials as stockMaterials,
   printers as stockPrinters,
+  type BambuModel,
   type Material,
   type Printer,
 } from '@brim/core/slicer.ts';
@@ -54,6 +57,8 @@ const toDraft = (kind: Kind, v: Printer | Material): Draft =>
         z: String(p.bed[2]),
         start: p.start,
         end: p.end,
+        bambuModel: p.bambuModel ?? '',
+        serial: p.serial ?? '',
       }))(v as Printer)
     : ((m) => ({
         name: m.name,
@@ -64,10 +69,16 @@ const toDraft = (kind: Kind, v: Printer | Material): Draft =>
       }))(v as Material);
 
 /** Field key → message for anything missing or out of range. */
-function validate(nums: Array<NumField>, d: Draft) {
+function validate(nums: Array<NumField>, d: Draft, serials: Array<string>) {
   const errors: Record<string, string> = {};
   if (!d.name.trim()) {
     errors.name = 'Enter a name.';
+  }
+  const serial = d.serial?.trim().toUpperCase();
+  if (serial && !/^[A-Z0-9]{6,32}$/.test(serial)) {
+    errors.serial = 'Use only letters and digits, as printed on the printer.';
+  } else if (serial && serials.includes(serial)) {
+    errors.serial = 'Another printer already has this serial number.';
   }
   for (const f of nums) {
     const v = Number(d[f.key]);
@@ -100,6 +111,12 @@ export function Settings(props: {
           ? {kind: routeKind as Kind, key: routeKey}
           : null
       : null;
+  const duplicate = (k: string) => {
+    const {serial: _, ...p} = printers[k];
+    const key = crypto.randomUUID();
+    setPrinters((ps) => ({...ps, [key]: {...p, name: `${p.name} (copy)`}}));
+    setEditing({kind: 'printer', key});
+  };
   const remove = (kind: Kind, k: string, name: string) => {
     if (!confirm(`Delete “${name}”?`)) {
       return;
@@ -123,6 +140,7 @@ export function Settings(props: {
         kind={kind}
         initial={toDraft(kind, current)}
         isNew={!key}
+        serials={Object.entries(printers).flatMap(([k, p]) => (k !== key && p.serial ? [p.serial] : []))}
         canDelete={!!key && key !== inUse[kind]}
         onCancel={() => setEditing(null)}
         onDelete={() => key && remove(kind, key, current.name)}
@@ -132,7 +150,14 @@ export function Settings(props: {
           if (kind === 'printer') {
             setPrinters((ps) => ({
               ...ps,
-              [k]: {name, bed: [Number(d.x), Number(d.y), Number(d.z)], start: d.start, end: d.end},
+              [k]: {
+                name,
+                bed: [Number(d.x), Number(d.y), Number(d.z)],
+                start: d.start,
+                end: d.end,
+                ...(d.bambuModel && {bambuModel: d.bambuModel as BambuModel}),
+                ...(d.serial.trim() && {serial: d.serial.trim().toUpperCase()}),
+              },
             }));
           } else {
             setMaterials((ms) => ({
@@ -202,6 +227,11 @@ export function Settings(props: {
                 ))}
                 <Table.Cell align="end">
                   <Stack direction="row" gap="xSmall">
+                    {kind === 'printer' && (
+                      <IconButton aria-label={`Duplicate ${v.name}`} onClick={() => duplicate(k)}>
+                        <ContentCopyIcon />
+                      </IconButton>
+                    )}
                     <IconButton aria-label={`Edit ${v.name}`} onClick={() => setEditing({kind, key: k})}>
                       <EditIcon />
                     </IconButton>
@@ -232,8 +262,14 @@ export function Settings(props: {
               hierarchy="secondary"
               iconStart={<RestartAltIcon />}
               onClick={() =>
-                confirm('Replace all printers and materials with the presets?') &&
-                (setPrinters(() => stockPrinters), setMaterials(() => stockMaterials))
+                confirm(
+                  'Replace all printers and materials with the presets? Printers with a serial number are kept.',
+                ) &&
+                (setPrinters((ps) => ({
+                  ...stockPrinters,
+                  ...Object.fromEntries(Object.entries(ps).filter(([, p]) => p.serial)),
+                })),
+                setMaterials(() => stockMaterials))
               }
             >
               Reset to presets
@@ -241,12 +277,15 @@ export function Settings(props: {
           </PageHeader.Actions>
         </PageHeader.Row>
         <PageHeader.Description>
-          Used for the bed check, slicing and G-code. The one in use cannot be deleted.
+          Used for the bed check, slicing and G-code. The one in use cannot be deleted. For several identical printers,
+          duplicate one and give each its serial number.
         </PageHeader.Description>
       </PageHeader.Root>
-      {section('printer', 'Printers', printers, ['Bed (mm)', 'Max Z (mm)'], (p) => [
+      {section('printer', 'Printers', printers, ['Bed (mm)', 'Max Z (mm)', 'Bambu model', 'Serial'], (p) => [
         `${p.bed[0]} × ${p.bed[1]}`,
         p.bed[2],
+        p.bambuModel ? bambuModels[p.bambuModel] : '—',
+        p.serial ?? '—',
       ])}
       {section('material', 'Materials', materials, ['Nozzle', 'Bed', 'Density', 'Fan'], (m) => [
         `${m.nozzle} °C`,
@@ -262,6 +301,7 @@ function Editor(props: {
   kind: Kind;
   initial: Draft;
   isNew: boolean;
+  serials?: Array<string>;
   canDelete: boolean;
   onCancel: () => void;
   onDelete: () => void;
@@ -271,7 +311,7 @@ function Editor(props: {
   const nums = kind === 'printer' ? printerNums : materialNums;
   const [draft, setDraft] = useState(props.initial);
   const [tried, setTried] = useState(false);
-  const errors = validate(nums, draft);
+  const errors = validate(nums, draft, props.serials ?? []);
   const shown = tried ? errors : {};
   const set = (k: string) => (v: string) => setDraft((d) => ({...d, [k]: v}));
   const save = () => (setTried(true), Object.keys(errors).length === 0 && props.onSave(draft));
@@ -325,6 +365,38 @@ function Editor(props: {
           </Grid.Root>
           {kind === 'printer' && (
             <>
+              <Dropdown.Root value={draft.bambuModel} onValueChange={(v) => set('bambuModel')(v as string)}>
+                <Stack gap="xSmall" align="stretch">
+                  <Dropdown.Label>Bambu model</Dropdown.Label>
+                  <Dropdown.Trigger>
+                    <Dropdown.Value>
+                      {(v: string) => (v ? bambuModels[v as BambuModel] : 'Not a Bambu printer')}
+                    </Dropdown.Value>
+                    <Dropdown.Icon />
+                  </Dropdown.Trigger>
+                  <Text className="muted">
+                    Must match the real printer: bambu-printer-mcp routes uploads and checks by it.
+                  </Text>
+                </Stack>
+                <Dropdown.Portal>
+                  <Dropdown.Positioner>
+                    <Dropdown.Popup>
+                      <Dropdown.List>
+                        {Object.entries({'': 'Not a Bambu printer', ...bambuModels}).map(([k, n]) => (
+                          <Dropdown.Item key={k} value={k}>
+                            {n}
+                          </Dropdown.Item>
+                        ))}
+                      </Dropdown.List>
+                    </Dropdown.Popup>
+                  </Dropdown.Positioner>
+                </Dropdown.Portal>
+              </Dropdown.Root>
+              {field(
+                'serial',
+                'Serial number (optional)',
+                <Input value={draft.serial} onValueChange={set('serial')} />,
+              )}
               {field(
                 'start',
                 'Start G-code',
