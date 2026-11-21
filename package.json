@@ -8,9 +8,11 @@
   "type": "module",
   "scripts": {
     "dev": "npm run dev -w apps/web",
+    "simulator": "npm start -w apps/simulator",
     "build": "npm run build -w apps/web",
     "preview": "npm run preview -w apps/web",
     "test": "npm test --workspaces --if-present",
+    "test:sim": "npm run test:sim -w packages/printer",
     "lint": "oxlint",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"
@@ -19,5 +21,8 @@
     "@nkzw/oxlint-config": "^3.0.1",
     "oxfmt": "^0.79.0",
     "oxlint": "^1.94.0"
+  },
+  "allowScripts": {
+    "bambu-printer-mcp@1.1.99": true
   }
 }
