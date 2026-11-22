@@ -1,6 +1,7 @@
 import {defineConfig, loadEnv, type Plugin} from 'vite';
 import react from '@vitejs/plugin-react';
 import {createIntent} from '@brim/core/llm.ts';
+import {printersApi} from '@brim/printer/api.ts';
 
 /** POST /api/intent {prompt, current} → Intent. 404 when no LLM key is set, so the client falls back to the regex parser. */
 const setup: Plugin['configureServer'] = async (server) => {
@@ -11,6 +12,9 @@ const setup: Plugin['configureServer'] = async (server) => {
       ? `brim: LLM intent on ${process.env.BRIM_MODEL || 'default model'}`
       : 'brim: no LLM key, using the regex parser',
   );
+  const printers = printersApi();
+  server.middlewares.use('/api/printers', printers.middleware);
+  server.httpServer?.on('close', () => void printers.close());
   server.middlewares.use('/api/intent', async (req, res) => {
     if (!intent || req.method !== 'POST') {
       return ((res.statusCode = 404), res.end());

@@ -6,6 +6,7 @@
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {ElicitRequestSchema} from '@modelcontextprotocol/sdk/types.js';
+import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 
 const server = fileURLToPath(import.meta.resolve('bambu-printer-mcp'));
@@ -30,6 +31,7 @@ export type Confirm = (message: string) => Promise<boolean>;
 
 export class ToolError extends Error {}
 
+/** Runs the MCP with only the env given here. */
 export async function connect(env: Env, confirm: Confirm) {
   const client = new Client({name: 'brim', version: '0'}, {capabilities: {elicitation: {}}});
   client.setRequestHandler(ElicitRequestSchema, async (request) => ({
@@ -40,6 +42,8 @@ export async function connect(env: Env, confirm: Confirm) {
     command: process.execPath,
     args: [server],
     env: {PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', ...env},
+    // The MCP loads a .env from its cwd; a neutral cwd keeps a stray one from configuring a printer.
+    cwd: tmpdir(),
     stderr: process.env.BRIM_MCP_DEBUG ? 'inherit' : 'ignore',
   });
   await client.connect(transport);
@@ -85,6 +89,27 @@ export async function connect(env: Env, confirm: Confirm) {
 }
 
 export type Printer = Awaited<ReturnType<typeof connect>>;
+
+/** A Bambu printer heard on the LAN. It never connects or authenticates; the access code comes from a person. */
+export type Found = {host: string; serial: string; name: string; model?: string; firmware?: string};
+
+/**
+ * Bambu printers announcing themselves over SSDP (UDP 2021), via counterpart_discover_printers.
+ * `network: 'unavailable'` means another app (Bambu Studio) holds the port.
+ */
+export async function discover(ms = 4000) {
+  // Discovery needs no printer; the MCP reads unset vars as empty.
+  const mcp = await connect({PRINTER_HOST: '', BAMBU_SERIAL: '', BAMBU_TOKEN: '', BAMBU_MODEL: ''}, async () => false);
+  try {
+    const {network, printers} = await mcp.call<{network: 'complete' | 'unavailable'; printers: Array<Found>}>(
+      'counterpart_discover_printers',
+      {duration_ms: ms},
+    );
+    return {network, printers: printers.filter((p) => p.serial)};
+  } finally {
+    await mcp.close();
+  }
+}
 
 /** counterpart_print_progress, the fields Brim reads. */
 export type Progress = {

@@ -18,6 +18,7 @@ void test('upload, print, pause, finish, camera', async (t) => {
     host: '127.0.0.1',
     dir: mkdtempSync(join(tmpdir(), 'fake-printer-')),
     jobSeconds: 2,
+    ssdp: false,
     ports: {mqtt: port, ftps: port + 1, camera: port + 2},
   });
   t.after(() => fake.stop());

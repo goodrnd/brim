@@ -13,6 +13,7 @@
     "preview": "npm run preview -w apps/web",
     "test": "npm test --workspaces --if-present",
     "test:sim": "npm run test:sim -w packages/printer",
+    "test:e2e": "npm run test:e2e -w apps/web",
     "lint": "oxlint",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"

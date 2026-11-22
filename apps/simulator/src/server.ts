@@ -12,6 +12,7 @@ import FtpSrv from 'ftp-srv';
 import {generate} from 'selfsigned';
 import {authorized, frame, packet} from './camera.ts';
 import {type Model, models, Printer, type Reply, type Request} from './printer.ts';
+import {announce} from './ssdp.ts';
 
 export type Config = {
   model: Model;
@@ -22,6 +23,8 @@ export type Config = {
   dir: string;
   jobSeconds: number;
   ports: {mqtt: number; ftps: number; camera: number};
+  /** Announce on the LAN over SSDP so bambu-printer-mcp's discovery finds it. */
+  ssdp: boolean;
 };
 
 export const defaults: Config = {
@@ -32,6 +35,7 @@ export const defaults: Config = {
   dir: join(tmpdir(), 'brim-simulator'),
   jobSeconds: 120,
   ports: {mqtt: 8883, ftps: 990, camera: 6000},
+  ssdp: true,
 };
 
 // oxlint-disable-next-line no-console -- a dev server: its log is its output
@@ -139,10 +143,13 @@ export async function start(config: Config = defaults) {
     report(printer.delta());
   }, 1000);
 
+  const unannounce = config.ssdp ? announce(serial, config.model, models[config.model].name) : () => {};
+
   return {
     printer,
     config: {...config, dir},
     async stop() {
+      unannounce();
       clearInterval(ticker);
       for (const timer of cameras) {
         clearInterval(timer);
@@ -183,6 +190,7 @@ if (import.meta.main) {
     host: env.SIM_HOST || defaults.host,
     dir: env.SIM_DIR || defaults.dir,
     jobSeconds: Number(env.SIM_JOB_SECONDS) || defaults.jobSeconds,
+    ssdp: env.SIM_SSDP !== '0',
   };
   const {config: running} = await start(config);
   // oxlint-disable-next-line no-console

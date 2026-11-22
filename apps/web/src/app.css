@@ -220,3 +220,17 @@ textarea.mono {
 .picker {
   inline-size: 12rem;
 }
+
+/* AMS spools on a connected printer's status row. */
+.spool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-end: 12px;
+}
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--semantic-color-border-secondary);
+}

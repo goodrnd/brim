@@ -6,9 +6,11 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "test:sim": "node --test --test-timeout=120000 test/*.test.ts"
+    "test": "node --test test/api.test.ts",
+    "test:sim": "node --test --test-timeout=120000 test/x2d.test.ts"
   },
   "dependencies": {
+    "@brim/core": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "bambu-printer-mcp": "1.1.99"
   },

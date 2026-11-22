@@ -15,6 +15,7 @@ import {
 import {useState, type ReactNode} from 'react';
 import {AddIcon, ArrowBackIcon, ContentCopyIcon, DeleteIcon, EditIcon, RestartAltIcon} from '../ui/icons.ts';
 import {go} from '../lib/route.ts';
+import {BambuPrinters} from './Connect.tsx';
 import {
   bambuModels,
   materials as stockMaterials,
@@ -287,6 +288,20 @@ export function Settings(props: {
         p.bambuModel ? bambuModels[p.bambuModel] : '—',
         p.serial ?? '—',
       ])}
+      <BambuPrinters
+        printers={printers}
+        onConnected={({serial, model, name}) =>
+          setPrinters((ps) => {
+            const key = Object.keys(ps).find((k) => ps[k].serial === serial);
+            if (key) {
+              return {...ps, [key]: {...ps[key], bambuModel: model}};
+            }
+            // shortcut: models without a stock profile (X2D, H2S…) start from the P1S bed; edit it in the printer's settings.
+            const stock = Object.values(stockPrinters as Dict<Printer>).find((p) => p.bambuModel === model);
+            return {...ps, [crypto.randomUUID()]: {...(stock ?? stockPrinters.p1s), name, bambuModel: model, serial}};
+          })
+        }
+      />
       {section('material', 'Materials', materials, ['Nozzle', 'Bed', 'Density', 'Fan'], (m) => [
         `${m.nozzle} °C`,
         `${m.bed} °C`,
