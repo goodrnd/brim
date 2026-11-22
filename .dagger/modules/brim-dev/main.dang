@@ -1,0 +1,55 @@
+"""
+Brim's checks: the same npm scripts you run locally, in a pinned Node container.
+"""
+type BrimDev {
+  """
+  Node with the workspace's dependencies installed and the source mounted.
+  """
+  pub runtime: Container!
+
+  new(ws: Workspace!) {
+    # Install from the manifests alone, so a source edit does not rerun npm ci.
+    let manifests = ws.directory("/", include: ["package.json", "package-lock.json", "**/package.json"], exclude: ["**/node_modules"])
+    let source = ws.directory("/", exclude: [".git", ".dagger", "**/node_modules", "**/dist", "**/.vite", ".env"])
+    self.runtime = container
+      .from("node:25.8.1-bookworm-slim")
+      .withMountedCache("/root/.npm", cacheVolume("brim-npm"))
+      .withWorkdir("/src")
+      .withDirectory("/src", manifests)
+      .withExec(["npm", "ci", "--no-audit", "--no-fund"])
+      .withDirectory("/src", source)
+    self
+  }
+
+  """
+  Lint with oxlint (npm run lint).
+  """
+  pub lint: Void @check {
+    runtime.withExec(["npm", "run", "lint"]).sync
+    null
+  }
+
+  """
+  Check formatting with oxfmt (npm run fmt:check).
+  """
+  pub format: Void @check {
+    runtime.withExec(["npm", "run", "fmt:check"]).sync
+    null
+  }
+
+  """
+  Run every workspace's node --test suite (npm test).
+  """
+  pub test: Void @check {
+    runtime.withExec(["npm", "test"]).sync
+    null
+  }
+
+  """
+  Type-check and build the web app (npm run build).
+  """
+  pub build: Void @check {
+    runtime.withExec(["npm", "run", "build"]).sync
+    null
+  }
+}

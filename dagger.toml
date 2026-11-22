@@ -1,0 +1,12 @@
+[modules.dang-sdk]
+source = "dagger.io/sdk/dang"
+
+[sdks.dang]
+module = "dang-sdk"
+
+[modules.brim-dev]
+main = true
+source = ".dagger/modules/brim-dev"
+
+[sdks.dang.scopes.".dagger/modules/brim-dev"]
+is-module = true
