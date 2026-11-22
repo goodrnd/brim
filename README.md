@@ -13,6 +13,8 @@ npm run dev
 
 Open the local URL printed by Vite.
 
+Without Node installed: `dagger call dev up --ports 5173:5173` serves the app with the printer simulator beside it.
+
 ## Make something
 
 1. **Design:** describe a part, or import an existing STL, 3MF or OBJ file.
