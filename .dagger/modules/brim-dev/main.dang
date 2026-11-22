@@ -46,10 +46,26 @@ type BrimDev {
   }
 
   """
+  Discover and connect the simulated X2D through the web server (npm run test:e2e).
+  The container gives the test its own Bambu ports and a private LAN address.
+  """
+  pub endToEnd: Void @check {
+    runtime.withExec(["npm", "run", "test:e2e"]).sync
+    null
+  }
+
+  """
+  The built web app (npm run build), e.g. `dagger call dist export --path apps/web/dist`.
+  """
+  pub dist: Directory! {
+    runtime.withExec(["npm", "run", "build"]).directory("apps/web/dist")
+  }
+
+  """
   Type-check and build the web app (npm run build).
   """
   pub build: Void @check {
-    runtime.withExec(["npm", "run", "build"]).sync
+    dist.sync
     null
   }
 }
