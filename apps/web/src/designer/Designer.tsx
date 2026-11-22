@@ -28,7 +28,7 @@ import {AutoFixHighIcon, ExpandMoreIcon} from '../ui/icons.ts';
 import {UploadButton, ListItem} from '../ui/controls.tsx';
 import {askFeedback, askLlm} from '../lib/intent.ts';
 import {edited, title, type Entry, type Part, type Project} from '../lib/library.ts';
-import {Viewer} from '../parts/Viewer.tsx';
+import {SimpleViewer} from '../parts/SimpleViewer.tsx';
 import {chips, withEdits, type Chip} from './fields.ts';
 import {renderThumbs} from './render.ts';
 
@@ -264,7 +264,7 @@ export function Designer(props: {
           {positions && (
             <Grid.Item span={{base: 'full', medium: 7}}>
               <Stack gap="xSmall" align="stretch">
-                <Viewer positions={positions} bed={[printer.bed[0], printer.bed[1]]} theme={theme} />
+                <SimpleViewer positions={positions} bed={[printer.bed[0], printer.bed[1]]} theme={theme} />
                 <Text className={fits(positions, printer.bed) ? 'muted' : 'negative'}>
                   {fits(positions, printer.bed) ? 'Fits' : 'Too big for'} the {printer.name} bed
                 </Text>
