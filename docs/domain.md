@@ -26,7 +26,7 @@ Printer · Material         profiles
 - **Use**: `{projectId, itemId, qty}` links a Project to a Part, File or Component. `qty` is how many to print or how many are needed; Files ignore it. One item can have Uses in many Projects.
 - **Note**: markdown body, always in one Project. Several small notes, not one document, so the user and agents can add without conflicts.
 - **Job**: one print of a Part, at `#/jobs` and `#/job/<id>`: which Part, printer, material and settings, with the slicer's time and filament estimate. `outcome` is unset while queued, then `ok` or `failed` (with an optional `note`), set by a person. A printer reporting "finished" is not `ok`: firmware only knows its commands ran.
-- **Printer**, **Material**: slicing profiles. Stock presets live in `@brim/core/slicer.ts`; users edit and add their own. A Printer is a profile; with a `serial` it is also that one physical printer. Identical printers are separate Printers (duplicate, then set each serial), so each can be addressed on its own. Serials are unique; "Reset to presets" keeps Printers that have one. A Bambu Printer also names its `bambuModel` (the `bambu_model` that [bambu-printer-mcp](https://dmontgomery40.github.io/bambu-printer-mcp/reference/printer-tools) takes); the printer's host, serial and access code stay in that server's env (`PRINTER_HOST`, `BAMBU_SERIAL`, `BAMBU_TOKEN`), never in Brim.
+- **Printer**, **Material**: slicing profiles. Stock presets live in `@brim/core/slicer.ts`; users edit and add their own. A Printer is a profile; with a `serial` it is also that one physical printer. Identical printers are separate Printers (duplicate, then set each serial), so each can be addressed on its own. Serials are unique; "Reset to presets" keeps Printers that have one. A Bambu Printer also names its `bambuModel` (the `bambu_model` that [bambu-printer-mcp](https://dmontgomery40.github.io/bambu-printer-mcp/reference/printer-tools) takes); Brim finds the printer's host and serial by discovery (SSDP); the access code comes from a person, is held only in the Brim server's memory and the MCP's env, and is never stored or sent to the browser.
 
 ## Rules
 
@@ -43,7 +43,7 @@ Printer · Material         profiles
 
 ## Status
 
-Built (browser storage): Part, Entry, Job, Printer, Material, Project, Note, Use (Parts only; `qty` has no UI yet and is always 1). Notes are plain text for now.
+Built (browser storage): Part, Entry, Job, Printer, Material, Project, Note, Use (Parts only; `qty` has no UI yet and is always 1). Notes are plain text for now. Bambu Printers can be found on the LAN and connected for live status; access codes are re-entered after a server restart.
 
 Next: Component. Planned with the backend: File, plus:
 
@@ -69,7 +69,7 @@ Live progress (percent, layer, temperatures) is read from the printer, never sto
 
 ## Open questions
 
-- Bambu printing (in progress, via bambu-printer-mcp; `@brim/printer` connects to it, not yet used by the web app): send a Job as `print_3mf` with a slicer-made `.gcode.3mf` rather than our G-code, read status and AMS spools from `counterpart_print_progress` / `get_printer_filaments`, and copy `counterpart_print_record` into the Job's `run` when the print ends. Firmware `finished` does not prove the part printed, so `outcome` stays a person's call.
+- Bambu printing (in progress, via bambu-printer-mcp; the web app discovers and connects printers and shows live status, but does not print yet): send a Job as `print_3mf` with a slicer-made `.gcode.3mf` rather than our G-code, read status and AMS spools from `counterpart_print_progress` / `get_printer_filaments`, and copy `counterpart_print_record` into the Job's `run` when the print ends. Firmware `finished` does not prove the part printed, so `outcome` stays a person's call.
 
 - MCP edits: change the Part in place (labelled by `source`) or work on a copy?
 - Job outcome beyond ok/failed (photos, measurements, camera frames from `counterpart_print_record`). Printed Parts kept as stock ("3 brackets in the drawer") would come from `ok` Jobs.

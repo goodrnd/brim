@@ -78,7 +78,7 @@ void test(
   async (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'brim-x2d-'));
     // The MCP always uses the printer's real ports, so this needs them free (stop `npm run simulator` first).
-    const sim = await start({...defaults, dir, jobSeconds: 4});
+    const sim = await start({...defaults, dir, jobSeconds: 4, ssdp: false});
     t.after(() => sim.stop());
     // The MCP asks a person only for physical checks (after a cleared error, say); none come up here.
     const printer = await connect(mcpEnv(sim.config), async () => false);
