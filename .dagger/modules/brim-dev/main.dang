@@ -55,6 +55,16 @@ type BrimDev {
   }
 
   """
+  The dev server with the simulated X2D beside it, e.g. `dagger call dev up --ports 5173:5173`.
+  Settings → Find printers lists the simulator; its access code is 12345678.
+  """
+  pub dev: Service! {
+    runtime
+      .withExposedPort(5173)
+      .asService(args: ["sh", "-c", "npm run simulator & exec npm run dev -w apps/web -- --host 0.0.0.0 --port 5173 --strictPort"])
+  }
+
+  """
   The built web app (npm run build), e.g. `dagger call dist export --path apps/web/dist`.
   """
   pub dist: Directory! {
