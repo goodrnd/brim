@@ -33,6 +33,8 @@ An npm workspace:
 
 - `apps/web`: the React app.
 - `packages/core` (`@brim/core`): geometry, ops, intent and slicer. Pure TypeScript, runs in the browser and Node.
+- `packages/printer` (`@brim/printer`): Brim's connection to Bambu printers. It runs [bambu-printer-mcp](https://github.com/DMontgomery40/bambu-printer-mcp) as a child process and calls its tools: slice, print, progress, filaments, pause, resume, cancel. Node only.
+- `apps/simulator` (`@brim/simulator`): a simulated Bambu printer, for developing without hardware (see below).
 
 The domain vocabulary is in [docs/domain.md](docs/domain.md). Run the commands below from the repo root.
 
@@ -51,6 +53,16 @@ npm test         # Run self-checks
 npm run build    # Type-check and build for production
 npm run preview  # Serve the production build locally
 ```
+
+### Printer simulator
+
+`npm run simulator` starts a simulated Bambu X2D with an AMS 2 Pro on this machine's real Bambu ports: MQTT over TLS (8883), implicit FTPS (990, its storage is a temp dir) and a P1-style camera (6000). It prints the bambu-printer-mcp settings that drive it. `BAMBU_MODEL=p1s` simulates a P1S instead.
+
+The X2D reports two nozzles, one external spool per nozzle, a four-slot AMS 2 Pro with drying, and its cancel state. A job heats up, then runs `PREPARE` → `RUNNING` → `FINISH`, with pause, resume and stop. Jobs take `SIM_JOB_SECONDS` (default 120). It does not run the G-code, simulate AMS loading or errors, or serve the RTSP camera that X1, P2S, H2 and X2D printers use.
+
+bambu-printer-mcp sends X2D prints and controls through Bambu's closed networking plug-in. For the simulator, `BAMBU_NATIVE_HELPER` points it at `apps/simulator/bin/native-helper`, a stand-in that hands the job to the simulator. That tests Brim and the MCP's own checks, not Bambu's transport.
+
+`npm run test:sim` slices a cube with Bambu Studio and prints it on the simulated X2D through bambu-printer-mcp. It needs Bambu Studio and the ports above free, so stop `npm run simulator` first; `npm test` leaves it out.
 
 ## Prototype limits
 
