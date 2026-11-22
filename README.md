@@ -56,6 +56,19 @@ npm run build    # Type-check and build for production
 npm run preview  # Serve the production build locally
 ```
 
+### Checks
+
+Pull requests run [Dagger](https://dagger.io) checks on Dagger Cloud: lint, format, test, end-to-end and build, the npm scripts above in a pinned Node container (`.dagger/modules/brim-dev`). To run them locally you need the Dagger CLI v1.0.0-beta.28 (the version the module is tested with) and a container runtime such as Docker or OrbStack.
+
+```sh
+dagger check                            # Run every check Dagger Cloud runs
+dagger check --check lint               # Run one check
+dagger check -i                         # Open a shell in the container when a check fails
+dagger cloud checks rerun               # Re-run this commit's checks on Dagger Cloud, e.g. after a flake
+dagger call dist export --path apps/web/dist  # Build the web app and copy it out
+dagger lock update                      # Refresh dagger.lock's pinned images (commit it)
+```
+
 ### Printer simulator
 
 `npm run simulator` starts a simulated Bambu X2D with an AMS 2 Pro on this machine's real Bambu ports: MQTT over TLS (8883), implicit FTPS (990, its storage is a temp dir) and a P1-style camera (6000). It prints the bambu-printer-mcp settings that drive it. `BAMBU_MODEL=p1s` simulates a P1S instead.
