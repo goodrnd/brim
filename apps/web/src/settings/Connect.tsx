@@ -1,7 +1,7 @@
 import {Button, Field, Heading, Input, Modal, Stack, Table, Text} from '@earendil-works/elanor-react';
 import {useEffect, useState} from 'react';
 import {bambuModels, type BambuModel, type Printer} from '@brim/core/slicer.ts';
-import type {discover, Found} from '@brim/printer/bambu.ts';
+import type {discover, Found, Frame} from '@brim/printer/bambu.ts';
 
 type Discovery = Awaited<ReturnType<typeof discover>>;
 /** counterpart_print_progress and get_printer_filaments, the fields shown here. */
@@ -19,7 +19,7 @@ const error = async (r: Response) =>
   ((await r.json().catch(() => null)) as {error?: string} | null)?.error ?? r.statusText;
 
 /** Live status of one connected printer, polled; never stored (docs/domain.md). */
-function useLive(serial: string | undefined, connected: number) {
+export function useLive(serial: string | undefined, connected: number) {
   const [live, setLive] = useState<Live | null>(null);
   useEffect(() => {
     if (!serial) {
@@ -42,7 +42,7 @@ function useLive(serial: string | undefined, connected: number) {
   return live;
 }
 
-function liveSummary(live: Live | null) {
+export function liveSummary(live: Live | null) {
   if (!live) {
     return 'Not connected';
   }
@@ -59,7 +59,7 @@ function liveSummary(live: Live | null) {
     .join(' · ');
 }
 
-function Spools({live}: {live: Live | null}) {
+export function Spools({live}: {live: Live | null}) {
   const trays = live?.filaments?.trays?.filter((t) => t.loaded !== false && t.tray_type) ?? [];
   return trays.length ? (
     <Text className="muted">
@@ -71,6 +71,34 @@ function Spools({live}: {live: Live | null}) {
       ))}
     </Text>
   ) : null;
+}
+
+/** The printer's chamber camera as a long-polled JPEG stream; nothing when it has none or is not connected. */
+export function Camera({serial, name}: {serial: string; name: string}) {
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    const abort = new AbortController();
+    void (async () => {
+      let seq = 0;
+      while (!abort.signal.aborted) {
+        const r = await fetch(`/api/printers/${serial}/camera?since=${seq}`, {signal: abort.signal}).catch(() => null);
+        const frame = r?.ok ? ((await r.json().catch(() => null)) as Frame | null) : null;
+        if (frame?.status === 'frame' && frame.base64) {
+          seq = frame.seq;
+          setSrc(`data:image/jpeg;base64,${frame.base64}`);
+        } else if (frame?.status !== 'unchanged') {
+          // Not connected, no camera or an error: drop the stale picture and retry slowly.
+          if (!abort.signal.aborted) {
+            setSrc('');
+          }
+          seq = 0;
+          await new Promise((done) => setTimeout(done, 5000));
+        }
+      }
+    })();
+    return () => abort.abort();
+  }, [serial]);
+  return src ? <img className="camera" src={src} alt={`${name} camera`} /> : null;
 }
 
 /**

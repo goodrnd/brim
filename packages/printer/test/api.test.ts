@@ -20,6 +20,7 @@ void test('printers api: discover, reject bad input and codes, connect, status w
       return {
         progress: async (): Promise<Progress> => ({state, problems: []}),
         filaments: async () => ({trays: [{slot: 0, tray_type: 'PLA'}]}),
+        camera: async (since: number) => ({status: 'frame' as const, seq: since + 1, base64: 'AA=='}),
         close: async () => void closed++,
       };
     },
@@ -69,4 +70,9 @@ void test('printers api: discover, reject bad input and codes, connect, status w
   assert.equal(live.status, 200);
   assert.equal(JSON.parse(liveText).progress.state, 'idle');
   assert.ok(!liveText.includes(token));
+
+  assert.equal((await fetch(`${base}/20P00A000000009/camera`)).status, 404);
+  const frame = await (await fetch(`${base}/${serial}/camera?since=4`)).json();
+  assert.deepEqual(frame, {status: 'frame', seq: 5, base64: 'AA=='});
+  assert.equal((await (await fetch(`${base}/${serial}/camera?since=-1`)).json()).seq, 1);
 });

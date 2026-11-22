@@ -4,6 +4,7 @@
  *   GET  /discover        Bambu printers announcing on the LAN
  *   POST /<serial>        {host, model, token}: connect; 401 when the printer does not answer with that code
  *   GET  /<serial>        live {progress, filaments}; 404 until connected
+ *   GET  /<serial>/camera?since=<seq>   the next camera Frame (long-polls up to 5 s); 404 until connected
  *
  * Access codes live only in this process's memory (one MCP child per printer) and are never sent back.
  */
@@ -14,7 +15,7 @@ import {type Confirm, connect, discover, type Env, type Printer} from './bambu.t
 
 type Discover = typeof discover;
 /** What these endpoints use of a connected printer. */
-type Live = Pick<Printer, 'progress' | 'filaments' | 'close'>;
+type Live = Pick<Printer, 'progress' | 'filaments' | 'camera' | 'close'>;
 type Connect = (env: Env, confirm: Confirm) => Promise<Live>;
 
 const serialRe = /^[A-Z0-9]{6,32}$/;
@@ -46,9 +47,23 @@ export function printersApi({find = discover, open = connect}: {find?: Discover;
     if ((origin && origin !== `http://${req.headers.host}`) || req.headers['sec-fetch-site'] === 'cross-site') {
       return send(403, {error: 'cross-origin request'});
     }
-    const path = (req.url ?? '').split('?')[0].replace(/^\/+/, '');
+    const url = new URL(req.url ?? '', 'http://x');
+    const path = url.pathname.replace(/^\/+/, '');
     if (req.method === 'GET' && path === 'discover') {
       return send(200, await find());
+    }
+    const [, cameraOf] = /^([A-Z0-9]{6,32})\/camera$/.exec(path) ?? [];
+    if (req.method === 'GET' && cameraOf) {
+      const printer = connected.get(cameraOf);
+      if (!printer) {
+        return send(404, {error: 'not connected'});
+      }
+      const since = Number(url.searchParams.get('since'));
+      try {
+        return send(200, await printer.camera(Number.isSafeInteger(since) && since > 0 ? since : 0));
+      } catch (error) {
+        return send(502, {error: (error as Error).message});
+      }
     }
     if (!serialRe.test(path)) {
       return send(404, {error: 'not found'});

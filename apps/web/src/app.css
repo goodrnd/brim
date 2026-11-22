@@ -234,3 +234,12 @@ textarea.mono {
   border-radius: 50%;
   border: 1px solid var(--semantic-color-border-secondary);
 }
+
+/* Live printer camera on Home. */
+.camera {
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 4px;
+}

@@ -472,7 +472,7 @@ export function App() {
                 </EmptyState.Body>
               </EmptyState.Root>
             ) : page === 'home' ? (
-              <Home parts={parts} projects={projects} jobs={jobs} />
+              <Home parts={parts} projects={projects} jobs={jobs} printers={printers} />
             ) : (
               <Library
                 tab={libraryTab}

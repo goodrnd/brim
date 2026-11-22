@@ -82,6 +82,11 @@ export async function connect(env: Env, confirm: Confirm) {
       }),
     progress: () => call<Progress>('counterpart_print_progress'),
     filaments: () => call('get_printer_filaments'),
+    /** A camera JPEG newer than `since`, waiting up to 5 s. Renews the shared stream, which closes once unwatched. */
+    camera: async (since = 0) => {
+      await call('camera_stream_start', {bambu_model: env.BAMBU_MODEL});
+      return call<Frame>('camera_frame', {since_seq: since, wait_ms: 5000, max_width: 960});
+    },
     pause: () => call('pause_print'),
     resume: () => call('resume_print', {bambu_model: env.BAMBU_MODEL}),
     cancel: () => call('cancel_print'),
@@ -110,6 +115,14 @@ export async function discover(ms = 4000) {
     await mcp.close();
   }
 }
+
+/** camera_frame: `base64` JPEG only with status `frame`. */
+export type Frame = {
+  status: 'frame' | 'unchanged' | 'stopped' | 'unavailable';
+  seq: number;
+  base64?: string;
+  reason?: 'no-camera' | 'auth' | 'unreachable';
+};
 
 /** counterpart_print_progress, the fields Brim reads. */
 export type Progress = {
