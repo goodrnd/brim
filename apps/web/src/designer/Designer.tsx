@@ -11,7 +11,7 @@ import {
   Text,
   TextArea,
 } from '@earendil-works/elanor-react';
-import {useEffect, useMemo, useState, type DragEvent} from 'react';
+import {useMemo, useState, type DragEvent} from 'react';
 import {
   buildPositions,
   describe,
@@ -78,10 +78,13 @@ export function Designer(props: {
     if (!text || busy) {
       return;
     }
-    // Feedback only improves the prompt; the plan read here stays off screen until Create.
     const s = spec ?? (await ask('plan'));
+    // Show the plan as chips and a preview; an already shown plan stays, so its chip edits survive.
+    if (!shown) {
+      setPlan({prompt: text, size, spec: s});
+      setEdits(undefined);
+    }
     if (!s) {
-      setPlan({prompt: text, size});
       return;
     }
     setBusy('plan');
@@ -224,7 +227,7 @@ export function Designer(props: {
                         onChange={(v) =>
                           setEdits((e) => ({
                             kind: spec.kind,
-                            values: {...(e?.kind === spec.kind ? e.values : {}), [c.field]: v},
+                            values: e?.kind === spec.kind ? {...e.values, [c.field]: v} : {[c.field]: v},
                           }))
                         }
                       />
@@ -320,17 +323,17 @@ function ChipInput({chip, onChange}: {chip: Chip; onChange: (v: number) => void}
 
 /** Example cards with real renders. Rendered once per theme, off the main viewer's WebGL context. */
 function Gallery({theme, compact, onPick}: {theme: string; compact?: boolean; onPick: (prompt: string) => void}) {
-  const [thumbs, setThumbs] = useState<{theme: string; urls: Array<string>}>();
-  useEffect(() => {
-    const urls = renderThumbs(examples.map((e) => buildPositions(parsePrompt(e.prompt).spec)));
-    setThumbs({theme, urls});
-  }, [theme]);
+  // theme is a dependency because renderThumbs reads the theme's colour tokens.
+  const urls = useMemo(
+    () => (theme ? renderThumbs(examples.map((e) => buildPositions(parsePrompt(e.prompt).spec))) : []),
+    [theme],
+  );
   return (
     <ul className={compact ? 'gallery compact' : 'gallery'}>
       {examples.map((e, i) => (
         <li key={e.name}>
           <button type="button" className="gallery-card" onClick={() => onPick(e.prompt)}>
-            {thumbs?.theme === theme ? <img src={thumbs.urls[i]} alt="" /> : <span className="gallery-empty" />}
+            {urls[i] ? <img src={urls[i]} alt="" /> : <span className="gallery-empty" />}
             <span className="gallery-name">{e.name}</span>
             {!compact && <span className="muted">{e.prompt}</span>}
           </button>

@@ -2,13 +2,17 @@ import type {IncomingMessage, ServerResponse} from 'node:http';
 import {defineConfig, loadEnv, type Plugin} from 'vite';
 import react from '@vitejs/plugin-react';
 import {createIntent} from '@brim/core/llm.ts';
-import {sizes} from '@brim/core/model.ts';
+import type {Current, Intent} from '@brim/core/intent.ts';
+import {sizes, type Size, type Spec} from '@brim/core/model.ts';
 import {printersApi} from '@brim/printer/api.ts';
 
 /**
  * POST /api/intent {prompt, current, size} → Intent; POST /api/feedback {prompt, spec} → text review of the plan.
  * 404 when no LLM key is set, so the client falls back to the regex parser.
  */
+/** Request body; `prompt` is checked in post, the rest by each endpoint. */
+type Body = {prompt: string; current?: Current; size?: Size; spec?: Spec};
+
 const setup: Plugin['configureServer'] = async (server) => {
   const llm = await createIntent();
   // oxlint-disable-next-line no-console
@@ -21,7 +25,7 @@ const setup: Plugin['configureServer'] = async (server) => {
   server.middlewares.use('/api/printers', printers.middleware);
   server.httpServer?.on('close', () => void printers.close());
   const post =
-    (answer: (body: any, run: NonNullable<typeof llm>) => Promise<unknown>) =>
+    (answer: (body: Body, run: NonNullable<typeof llm>) => Promise<Intent | string>) =>
     async (req: IncomingMessage, res: ServerResponse) => {
       if (!llm || req.method !== 'POST') {
         return ((res.statusCode = 404), res.end());
@@ -31,7 +35,7 @@ const setup: Plugin['configureServer'] = async (server) => {
         body += chunk;
       }
       try {
-        const json = JSON.parse(body);
+        const json: Body = JSON.parse(body);
         if (typeof json.prompt !== 'string' || json.prompt.length > 2000) {
           throw new Error('bad prompt');
         }
