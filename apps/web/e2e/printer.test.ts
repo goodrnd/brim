@@ -34,10 +34,13 @@ void test(
 
     const found = await (await fetch(`${api}/discover`)).json();
     assert.equal(found.network, 'complete', 'UDP 2021 is held by another app (Bambu Studio?)');
-    const x2d = found.printers.find((p: {serial: string}) => p.serial === defaults.serial);
+    // Ours, not another simulator on the same network (e.g. a parallel run on a shared Dagger engine).
+    const x2d = found.printers.find(
+      (p: {serial: string; host: string}) =>
+        p.serial === defaults.serial && lanAddresses().some((a) => a.address === p.host),
+    );
     assert.ok(x2d, `simulator not discovered: ${JSON.stringify(found)}`);
     assert.equal(x2d.model, 'x2d');
-    assert.ok(lanAddresses().some((a) => a.address === x2d.host));
 
     const post = (token: string) =>
       fetch(`${api}/${x2d.serial}`, {
