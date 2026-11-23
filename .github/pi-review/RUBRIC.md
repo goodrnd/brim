@@ -114,4 +114,35 @@ Provide your findings in a clear, structured format:
 6. Do not generate a full PR fix — only flag issues and optionally provide short suggestion blocks.
 7. End with the required "Human Reviewer Callouts (Non-Blocking)" section and all applicable bold callouts (no yes/no).
 
+### Comment layout
+
+Your output is posted verbatim as a GitHub PR comment, so write GitHub-flavored Markdown in exactly this shape:
+
+```markdown
+**Verdict:** ✅ correct | ⚠️ needs attention: <one-sentence summary>
+
+| Priority | Finding | Location |
+| --- | --- | --- |
+| P1 | <short title> | `path/to/file.ts:42` |
+
+<details>
+<summary><b>[P1] Short title</b>: <code>path/to/file.ts:42</code></summary>
+
+<explanation paragraph, optional suggestion block>
+
+</details>
+
+<details>
+<summary>Human Reviewer Callouts (Non-Blocking)</summary>
+
+- **This change ...:** ...
+
+</details>
+```
+
+- Use one verdict on the verdict line: `✅ correct` or `⚠️ needs attention`, never both.
+- One `<details>` block per finding, in the same order as the table. Keep a blank line after `<summary>` and before `</details>` so the Markdown inside renders.
+- Leave out the table when there are no findings, and say the code looks good on the verdict line.
+- No preamble or closing remarks outside this layout.
+
 Output all findings the author would fix if they knew about them. If there are no qualifying findings, explicitly state the code looks good. Don't stop at the first finding - list every qualifying issue. Then append the required non-blocking callouts section.

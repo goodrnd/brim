@@ -25,6 +25,7 @@ jobs:
     concurrency:
       group: pi-review-${{ github.event.pull_request.number || github.event.issue.number }}
     env:
+      PI_REVIEW_MODEL: ${{ vars.PI_REVIEW_MODEL || 'opencode-go/deepseek-v4.1-flash' }}
       PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
       - uses: actions/setup-node@v4
@@ -62,7 +63,7 @@ jobs:
         # `read` can still reach /proc/self/environ, so the comment step checks the output for the key.
         run: |
           pi --print --no-session --no-approve --no-extensions \
-            --model "${{ vars.PI_REVIEW_MODEL || 'opencode-go/deepseek-v4.1-flash' }}" \
+            --model "$PI_REVIEW_MODEL" \
             --tools read,grep,find,ls \
             "@$RUNNER_TEMP/prompt.md" > "$RUNNER_TEMP/review.md"
           test -s "$RUNNER_TEMP/review.md"
@@ -80,5 +81,11 @@ jobs:
               exit 1
             fi
           done
-          { echo '## pi review'; echo; cat "$RUNNER_TEMP/review.md"; } > "$RUNNER_TEMP/comment.md"
+          {
+            echo '## pi review'
+            echo
+            cat "$RUNNER_TEMP/review.md"
+            echo
+            printf '<sub>Reviewed %s with `%s`. Comment `/review` to re-run.</sub>\n' "$(git rev-parse --short HEAD)" "$PI_REVIEW_MODEL"
+          } > "$RUNNER_TEMP/comment.md"
           gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/comment.md" --edit-last --create-if-none
