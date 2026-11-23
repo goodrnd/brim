@@ -26,8 +26,8 @@ export async function askLlm(prompt: string, m?: Model, size?: Size): Promise<In
   }
 }
 
-/** The LLM's review of a planned spec; undefined when no LLM is configured or it fails. */
-export async function askFeedback(prompt: string, spec: Spec): Promise<string | undefined> {
+/** The LLM's review of a planned spec, or why there is none: `unavailable` when no LLM is configured. */
+export async function askFeedback(prompt: string, spec: Spec): Promise<{text: string} | {error: string}> {
   try {
     const r = await fetch('/api/feedback', {
       method: 'POST',
@@ -35,13 +35,10 @@ export async function askFeedback(prompt: string, spec: Spec): Promise<string | 
       body: JSON.stringify({prompt, spec}),
     });
     if (r.ok) {
-      return await r.json();
+      return {text: await r.json()};
     }
-    if (r.status !== 404) {
-      // oxlint-disable-next-line no-console
-      console.warn('brim: LLM feedback failed:', await r.text());
-    }
-  } catch {
-    // offline, server down: no feedback
+    return {error: r.status === 404 ? 'unavailable' : (await r.text()) || `HTTP ${r.status}`};
+  } catch (error) {
+    return {error: (error as Error).message};
   }
 }

@@ -11,7 +11,7 @@ import {
   Text,
   TextArea,
 } from '@earendil-works/elanor-react';
-import {useMemo, useState, type DragEvent} from 'react';
+import {useEffect, useMemo, useState, type DragEvent} from 'react';
 import {
   buildPositions,
   describe,
@@ -54,7 +54,12 @@ export function Designer(props: {
   const [prompt, setPrompt] = useState('');
   const [size, setSize] = useState<Size>('medium'); // default size for dimensions the prompt leaves out
   const [plan, setPlan] = useState<{prompt: string; size: Size; spec?: Spec}>(); // spec unset: no shape understood
-  const [feedback, setFeedback] = useState<{prompt: string; size: Size; spec: Spec; text?: string}>(); // text unset: no LLM answered
+  const [feedback, setFeedback] = useState<{
+    prompt: string;
+    size: Size;
+    spec: Spec;
+    reply: {text: string} | {error: string};
+  }>();
   const [busy, setBusy] = useState<'plan' | 'create'>(); // which button is waiting on the LLM
   const [edits, setEdits] = useState<{kind: Kind; values: Partial<Spec>}>();
   const [dragging, setDragging] = useState(false);
@@ -88,9 +93,9 @@ export function Designer(props: {
       return;
     }
     setBusy('plan');
-    const t = await askFeedback(text, s);
+    const reply = await askFeedback(text, s);
     setBusy(undefined);
-    setFeedback({prompt: text, size, spec: s, text: t});
+    setFeedback({prompt: text, size, spec: s, reply});
   };
   const create = async () => {
     if (!text || busy) {
@@ -163,8 +168,12 @@ export function Designer(props: {
                   feedback.prompt === text &&
                   feedback.size === size &&
                   (!spec || feedback.spec === spec) && (
-                    <Text className="muted" style={{whiteSpace: 'pre-line'}}>
-                      {feedback.text ?? 'No feedback: the AI is unavailable.'}
+                    <Text className={'text' in feedback.reply ? 'muted' : 'negative'} style={{whiteSpace: 'pre-line'}}>
+                      {'text' in feedback.reply
+                        ? feedback.reply.text
+                        : feedback.reply.error === 'unavailable'
+                          ? 'No feedback: no AI is configured.'
+                          : `Feedback failed: ${feedback.reply.error}`}
                     </Text>
                   )}
                 {busy === 'plan' && (
@@ -225,10 +234,10 @@ export function Designer(props: {
                         key={`${spec.kind}-${c.field}-${shown!.spec![c.field]}`}
                         chip={c}
                         onChange={(v) =>
-                          setEdits((e) => ({
-                            kind: spec.kind,
-                            values: e?.kind === spec.kind ? {...e.values, [c.field]: v} : {[c.field]: v},
-                          }))
+                          setEdits((e) => {
+                            const {[c.field]: _, ...rest} = e?.kind === spec.kind ? e.values : {};
+                            return {kind: spec.kind, values: v === undefined ? rest : {...rest, [c.field]: v}};
+                          })
                         }
                       />
                     ))}
@@ -298,9 +307,11 @@ export function Designer(props: {
   );
 }
 
-/** One understood value: label, number, unit. Keeps its own draft so "1." can be typed. */
-function ChipInput({chip, onChange}: {chip: Chip; onChange: (v: number) => void}) {
-  const [draft, setDraft] = useState(String(Math.round(chip.value * 10) / 10));
+const fmt = (n: number) => String(Math.round(n * 10) / 10);
+
+/** One understood value: label, number, unit. Keeps its own draft so "1." can be typed; undefined drops the edit. */
+function ChipInput({chip, onChange}: {chip: Chip; onChange: (v: number | undefined) => void}) {
+  const [draft, setDraft] = useState(fmt(chip.value));
   return (
     <label className="chip">
       <span className="muted">{chip.label}</span>
@@ -311,29 +322,39 @@ function ChipInput({chip, onChange}: {chip: Chip; onChange: (v: number) => void}
         onValueChange={(v) => {
           setDraft(v);
           const n = Number(v);
-          if (v.trim() && Number.isFinite(n) && n >= 0) {
-            onChange(n);
-          }
+          onChange(v.trim() && Number.isFinite(n) && n >= 0 ? n : undefined);
         }}
+        // On leaving, show the value actually used: the plan's when cleared, or after normalize clamped it.
+        onBlur={() => setDraft(fmt(chip.value))}
       />
       {chip.unit && <span className="muted">{chip.unit}</span>}
     </label>
   );
 }
 
-/** Example cards with real renders. Rendered once per theme, off the main viewer's WebGL context. */
+// Example renders per theme (they use its colour tokens), kept across Gallery mounts.
+const thumbCache = new Map<string, Array<string>>();
+const thumbsFor = (theme: string) => {
+  if (!thumbCache.has(theme)) {
+    thumbCache.set(theme, renderThumbs(examples.map((e) => buildPositions(parsePrompt(e.prompt).spec))));
+  }
+  return thumbCache.get(theme)!;
+};
+
+/** Example cards with real renders, made once per theme off the main viewer's WebGL context. */
 function Gallery({theme, compact, onPick}: {theme: string; compact?: boolean; onPick: (prompt: string) => void}) {
-  // theme is a dependency because renderThumbs reads the theme's colour tokens.
-  const urls = useMemo(
-    () => (theme ? renderThumbs(examples.map((e) => buildPositions(parsePrompt(e.prompt).spec))) : []),
-    [theme],
-  );
+  const [urls, setUrls] = useState<{theme: string; urls: Array<string>}>();
+  // After paint, so opening the examples never blocks on rendering.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => theme && setUrls({theme, urls: thumbsFor(theme)}));
+    return () => cancelAnimationFrame(id);
+  }, [theme]);
   return (
     <ul className={compact ? 'gallery compact' : 'gallery'}>
       {examples.map((e, i) => (
         <li key={e.name}>
           <button type="button" className="gallery-card" onClick={() => onPick(e.prompt)}>
-            {urls[i] ? <img src={urls[i]} alt="" /> : <span className="gallery-empty" />}
+            {urls?.theme === theme ? <img src={urls.urls[i]} alt="" /> : <span className="gallery-empty" />}
             <span className="gallery-name">{e.name}</span>
             {!compact && <span className="muted">{e.prompt}</span>}
           </button>
