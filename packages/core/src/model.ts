@@ -80,6 +80,10 @@ export const defaults: Record<Kind, Partial<Spec>> = {
   tag: {width: 50, depth: 20, height: 3, corner: 4},
 };
 
+/** Default-size presets: scale the default width, depth and height. Walls and holes keep their printable sizes. */
+export const sizes = {small: 0.6, medium: 1, large: 1.6};
+export type Size = keyof typeof sizes;
+
 const kindWords: Array<[Kind, RegExp]> = [
   ['vase', /\bvases?\b/],
   ['cup', /\b(cup|mug|planter|pot|bowl)s?\b/],
@@ -94,6 +98,9 @@ const kindWords: Array<[Kind, RegExp]> = [
   ['box', /\b(box|tray|cube|block|container|organi[sz]er)s?\b/],
   ['cylinder', /\b(cylinder|puck|disc|disk|peg)s?\b/],
 ];
+
+/** The shape a prompt names, if any ("planter" → cup). */
+export const kindOf = (prompt: string) => kindWords.find(([, re]) => re.test(prompt.toLowerCase()))?.[0];
 
 const NUM = String.raw`(\d+(?:\.\d+)?)\s*(mm|cm|in)?`;
 const toMm = (n: string, unit?: string) => Number(n) * (unit === 'cm' ? 10 : unit === 'in' ? 25.4 : 1);
@@ -148,7 +155,7 @@ function resizes(t: string): Array<Resize> {
 }
 
 const fmt = (n: number) => String(Math.round(n * 10) / 10);
-const round = new Set<Kind>(['vase', 'cup', 'cylinder', 'tube', 'cone', 'sphere', 'gear', 'hex', 'star']);
+export const round = new Set<Kind>(['vase', 'cup', 'cylinder', 'tube', 'cone', 'sphere', 'gear', 'hex', 'star']);
 
 export function describe(spec: Spec): string {
   const size = round.has(spec.kind)
@@ -186,14 +193,14 @@ export function describe(spec: Spec): string {
 }
 
 /** Turns a prompt into a spec. With `prev`, the prompt edits that spec. Returns what changed. */
-export function parsePrompt(prompt: string, prev?: Spec) {
+export function parsePrompt(prompt: string, prev?: Spec, size: Size = 'medium') {
   const t = prompt.toLowerCase();
   const changes: Array<string> = [];
-  const kind = kindWords.find(([, re]) => re.test(t))?.[0];
+  const kind = kindOf(t);
   let s: Spec;
   if (!prev || (kind && kind !== prev.kind)) {
     const k = kind ?? prev?.kind ?? 'box';
-    s = newSpec(k);
+    s = newSpec(k, {}, size);
     if (prev) {
       changes.push(`turned it into a ${k}`);
     }
@@ -353,8 +360,11 @@ export function parsePrompt(prompt: string, prev?: Spec) {
   return {spec: s, changes};
 }
 
-export const newSpec = (kind: Kind, over: Partial<Spec> = {}): Spec =>
-  normalize({...base, ...defaults[kind], ...over, kind});
+export function newSpec(kind: Kind, over: Partial<Spec> = {}, size: Size = 'medium'): Spec {
+  const d = {...base, ...defaults[kind]};
+  const f = sizes[size];
+  return normalize({...d, width: d.width * f, depth: d.depth * f, height: d.height * f, ...over, kind});
+}
 
 const int = (v: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(v)));
 

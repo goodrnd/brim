@@ -2,7 +2,14 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
-import {createModels, fauxAssistantMessage, fauxProvider, fauxToolCall, type ToolCall} from '@earendil-works/pi-ai';
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+  type ToolCall,
+} from '@earendil-works/pi-ai';
 import {buildContext, readIntent, type Current, type Intent} from '../src/intent.ts';
 import {applyOps, parsePrompt} from '../src/model.ts';
 import {cases, sameSpec} from './cases.ts';
@@ -95,4 +102,17 @@ void test('mesh ops: rotate 180 about X flips, scale scales', async () => {
     z.map(Math.round).sort((a, b) => a - b),
     [0, 20, 20],
   ); // the top vertex is now at the bottom, rested on z=0
+});
+
+void test('feedback: the plan goes out with the reviewer prompt, text comes back', async () => {
+  const {feedbackContext, feedbackPrompt, readFeedback} = await import('../src/intent.ts');
+  const {newSpec} = await import('../src/model.ts');
+  const ctx = feedbackContext('vase 120 tall', newSpec('vase', {height: 120}));
+  assert.equal(ctx.systemPrompt, feedbackPrompt);
+  assert.equal(ctx.tools, undefined);
+  assert.match(String(ctx.messages[0].content), /Request: vase 120 tall\nPlan: \{"kind":"vase".*"height":120/);
+  faux.setResponses([fauxAssistantMessage([fauxText('  - Walls are fine.  ')])]);
+  assert.equal(readFeedback(await models.completeSimple(faux.getModel(), ctx)), '- Walls are fine.');
+  assert.throws(() => readFeedback({stopReason: 'stop', content: []}), /no feedback/);
+  assert.throws(() => readFeedback({stopReason: 'error', errorMessage: 'boom', content: []}), /boom/);
 });

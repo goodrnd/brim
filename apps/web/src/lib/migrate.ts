@@ -1,4 +1,6 @@
 // One-time localStorage upgrades. Runs before the app reads storage; each step is a no-op once done.
+import {autoName} from './library.ts';
+
 type Storage = Pick<globalThis.Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 const rename = ({projectId, model, ...j}: {projectId?: string; model?: string}) => ({
@@ -6,6 +8,9 @@ const rename = ({projectId, model, ...j}: {projectId?: string; model?: string}) 
   partId: projectId,
   part: model,
 });
+
+const unnamed = (p: {name?: string; history?: Array<{model?: {type?: string}}>}) =>
+  !p.name && p.history?.at(-1)?.model?.type === 'param';
 
 export function migrate(s: Storage) {
   // Project → Part rename: library key and job fields.
@@ -45,6 +50,15 @@ export function migrate(s: Storage) {
     const jobs = JSON.parse(s.getItem('brim-jobs') ?? 'null');
     if (Array.isArray(jobs) && jobs.some((j) => 'done' in j)) {
       s.setItem('brim-jobs', JSON.stringify(jobs.map(({done, ...j}) => (done ? {...j, outcome: 'ok'} : j))));
+    }
+  } catch {
+    // broken JSON: useStored falls back to defaults
+  }
+  // Unnamed generated parts get a friendly name instead of "Untitled box".
+  try {
+    const parts = JSON.parse(s.getItem('brim-parts') ?? 'null');
+    if (Array.isArray(parts) && parts.some(unnamed)) {
+      s.setItem('brim-parts', JSON.stringify(parts.map((p) => (unnamed(p) ? {...p, name: autoName()} : p))));
     }
   } catch {
     // broken JSON: useStored falls back to defaults

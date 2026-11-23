@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run dev -w apps/web",
+    "dev:op": "op run --env-file=.env.op -- npm run dev",
     "simulator": "npm start -w apps/simulator",
     "build": "npm run build -w apps/web",
     "preview": "npm run preview -w apps/web",

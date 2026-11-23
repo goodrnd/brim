@@ -44,7 +44,7 @@ Built with React, TypeScript, Vite, Three.js, and Elanor UI components. Model ge
 
 ### AI prompts (optional)
 
-With a key in the repo-root `.env` (see `.env.sample`), the dev server sends each prompt to an LLM through [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai). The LLM returns a typed `Spec` or an `Op[]` edit list, never mesh data, and the resolved ops are shown in the history. The default model is `opencode-go/deepseek-v4.1-flash` (`OPENCODE_API_KEY`). Set `BRIM_MODEL=provider/model-id` to use any pi-ai provider, with that provider's usual key variable. Without a key, or when a call fails, Brim uses the built-in rule-based parser.
+With a key in the repo-root `.env` (see `.env.sample`), the dev server sends each prompt to an LLM through [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai). The LLM returns a typed `Spec` or an `Op[]` edit list, never mesh data, and the resolved ops are shown in the history. The default model is `opencode-go/deepseek-v4.1-flash` (`OPENCODE_API_KEY`). Set `BRIM_MODEL=provider/model-id` to use any pi-ai provider, with that provider's usual key variable. Without a key, or when a call fails, Brim uses the built-in rule-based parser. With the [1Password CLI](https://developer.1password.com/docs/cli/), `npm run dev:op` reads the key from the references in `.env.op` instead, so no `.env` is needed.
 
 ```sh
 npm run record -w packages/core   # re-run the paraphrase set against the real LLM and save replies for npm test
