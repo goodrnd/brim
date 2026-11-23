@@ -13,6 +13,8 @@ npm run dev
 
 Open the local URL printed by Vite.
 
+Without Node installed: `dagger call dev up --ports 5173:5173` serves the app with the printer simulator beside it.
+
 ## Make something
 
 1. **Design:** describe a part, or import an existing STL, 3MF or OBJ file.
@@ -52,6 +54,19 @@ npm run record -w packages/core   # re-run the paraphrase set against the real L
 npm test         # Run self-checks
 npm run build    # Type-check and build for production
 npm run preview  # Serve the production build locally
+```
+
+### Checks
+
+Pull requests run [Dagger](https://dagger.io) checks on Dagger Cloud: lint, format, test, end-to-end and build, the npm scripts above in a pinned Node container (`.dagger/modules/brim-dev`). To run them locally you need the Dagger CLI v1.0.0-beta.28 (the version the module is tested with) and a container runtime such as Docker or OrbStack.
+
+```sh
+dagger check                            # Run every check Dagger Cloud runs
+dagger check --check lint               # Run one check
+dagger check -i                         # Open a shell in the container when a check fails
+dagger cloud checks rerun               # Re-run this commit's checks on Dagger Cloud, e.g. after a flake
+dagger call dist export --path apps/web/dist  # Build the web app and copy it out
+dagger lock update                      # Refresh dagger.lock's pinned images (commit it)
 ```
 
 ### Printer simulator

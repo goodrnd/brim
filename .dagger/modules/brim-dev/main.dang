@@ -1,0 +1,81 @@
+"""
+Brim's checks: the same npm scripts you run locally, in a pinned Node container.
+"""
+type BrimDev {
+  """
+  Node with the workspace's dependencies installed and the source mounted.
+  """
+  pub runtime: Container!
+
+  new(ws: Workspace!) {
+    # Install from the manifests alone, so a source edit does not rerun npm ci.
+    let manifests = ws.directory("/", include: ["package.json", "package-lock.json", "**/package.json"], exclude: ["**/node_modules"])
+    let source = ws.directory("/", exclude: [".git", ".dagger", "**/node_modules", "**/dist", "**/.vite", ".env"])
+    self.runtime = container
+      .from("node:25.8.1-bookworm-slim")
+      .withMountedCache("/root/.npm", cacheVolume("brim-npm"))
+      .withWorkdir("/src")
+      .withDirectory("/src", manifests)
+      .withExec(["npm", "ci", "--no-audit", "--no-fund"])
+      .withDirectory("/src", source)
+    self
+  }
+
+  """
+  Lint with oxlint (npm run lint).
+  """
+  pub lint: Void @check {
+    runtime.withExec(["npm", "run", "lint"]).sync
+    null
+  }
+
+  """
+  Check formatting with oxfmt (npm run fmt:check).
+  """
+  pub format: Void @check {
+    runtime.withExec(["npm", "run", "fmt:check"]).sync
+    null
+  }
+
+  """
+  Run every workspace's node --test suite (npm test).
+  """
+  pub test: Void @check {
+    runtime.withExec(["npm", "test"]).sync
+    null
+  }
+
+  """
+  Discover and connect the simulated X2D through the web server (npm run test:e2e).
+  The container gives the test its own Bambu ports and a private LAN address.
+  """
+  pub endToEnd: Void @check {
+    runtime.withExec(["npm", "run", "test:e2e"]).sync
+    null
+  }
+
+  """
+  The dev server with the simulated X2D beside it, e.g. `dagger call dev up --ports 5173:5173`.
+  Settings → Find printers lists the simulator; its access code is 12345678.
+  """
+  pub dev: Service! {
+    runtime
+      .withExposedPort(5173)
+      .asService(args: ["sh", "-c", "npm run simulator & exec npm run dev -w apps/web -- --host 0.0.0.0 --port 5173 --strictPort"])
+  }
+
+  """
+  The built web app (npm run build), e.g. `dagger call dist export --path apps/web/dist`.
+  """
+  pub dist: Directory! {
+    runtime.withExec(["npm", "run", "build"]).directory("apps/web/dist")
+  }
+
+  """
+  Type-check and build the web app (npm run build).
+  """
+  pub build: Void @check {
+    dist.sync
+    null
+  }
+}
