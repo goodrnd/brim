@@ -25,7 +25,7 @@ export function Library(props: {
             {tab === 'parts' ? (
               <>
                 <UploadButton onFile={props.onUpload} />
-                <Button iconStart={<AddIcon />} onClick={() => go('new')}>
+                <Button iconStart={<AddIcon />} onClick={() => go('design')}>
                   New part
                 </Button>
               </>
@@ -72,7 +72,7 @@ export function Library(props: {
               </EmptyState.Description>
             </EmptyState.Copy>
             <EmptyState.Actions>
-              <Button iconStart={<AddIcon />} onClick={() => go('new')}>
+              <Button iconStart={<AddIcon />} onClick={() => go('design')}>
                 New part
               </Button>
             </EmptyState.Actions>

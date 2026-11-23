@@ -65,7 +65,7 @@ export function ProjectPage(props: {
           </Heading>
           <Stack direction="row" gap="small">
             <UploadButton compact onFile={props.onUpload} />
-            <Button density="compact" iconStart={<AddIcon />} onClick={() => go(`new/${project.id}`)}>
+            <Button density="compact" iconStart={<AddIcon />} onClick={() => go(`design/${project.id}`)}>
               New part
             </Button>
           </Stack>

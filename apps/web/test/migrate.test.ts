@@ -61,3 +61,23 @@ void test('turns Job.done into outcome', () => {
   migrate(s);
   assert.deepEqual(s.m, after, 'second run is a no-op');
 });
+
+void test('names unnamed generated parts once', () => {
+  const param = {history: [{model: {type: 'param'}}]};
+  const mesh = {history: [{model: {type: 'mesh'}}]};
+  const s = store({
+    'brim-parts': JSON.stringify([
+      {id: '1', ...param},
+      {id: '2', name: 'Mine', ...param},
+      {id: '3', ...mesh},
+    ]),
+  });
+  migrate(s);
+  const [a, b, c] = JSON.parse(s.m.get('brim-parts')!);
+  assert.match(a.name, /^[A-Z][a-z]+ [a-z]+$/);
+  assert.equal(b.name, 'Mine');
+  assert.equal(c.name, undefined);
+  const after = new Map(s.m);
+  migrate(s);
+  assert.deepEqual(s.m, after, 'second run is a no-op');
+});

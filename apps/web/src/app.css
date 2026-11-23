@@ -147,6 +147,18 @@ html[data-color-scheme='dark'] .brand-mark {
   overflow: auto;
 }
 
+.history-step {
+  cursor: pointer;
+}
+
+.history li.current {
+  font-weight: 600;
+}
+
+.steps {
+  flex: 1;
+}
+
 /* Hidden until the theme tokens load, so there is no unstyled flash. */
 html:not([data-ready]) body {
   visibility: hidden;
@@ -242,4 +254,119 @@ textarea.mono {
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: 4px;
+}
+
+/* Designer: big prompt, live preview, understood values as editable chips. */
+.designer {
+  border-radius: var(--semantic-dimension-radius-large);
+  outline: 2px dashed transparent;
+  outline-offset: 0.5rem;
+}
+.designer.dragging {
+  outline-color: var(--semantic-color-background-fill-primary);
+}
+
+.prompt-hero {
+  display: grid;
+  gap: var(--semantic-dimension-space-gap-medium);
+  padding: var(--semantic-dimension-space-padding-large);
+  border: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+  border-radius: var(--semantic-dimension-radius-large);
+  background: var(--semantic-color-background-fill-secondary);
+}
+.prompt-hero textarea {
+  min-block-size: 7rem;
+  font-size: 1.125rem;
+  resize: vertical;
+}
+
+.pulse {
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-end: var(--semantic-dimension-space-gap-small);
+  border-radius: var(--semantic-dimension-radius-full);
+  background: var(--semantic-color-background-fill-primary);
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+@keyframes pulse {
+  to {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
+.kind {
+  text-transform: capitalize;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--semantic-dimension-space-gap-small);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.25rem 0.125rem 0.625rem;
+  border: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+  border-radius: var(--semantic-dimension-radius-full);
+}
+.chip:focus-within {
+  border-color: var(--semantic-color-background-fill-primary);
+}
+.chip input {
+  inline-size: auto;
+  min-inline-size: 0;
+  text-align: end;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--semantic-dimension-space-gap-medium);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gallery.compact {
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+}
+.gallery-card {
+  display: grid;
+  gap: 0.25rem;
+  inline-size: 100%;
+  padding: var(--semantic-dimension-space-padding-medium);
+  border: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+  border-radius: var(--semantic-dimension-radius-medium);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.gallery-card:hover,
+.gallery-card:focus-visible {
+  border-color: var(--semantic-color-background-fill-primary);
+  background: var(--semantic-color-background-fill-secondary);
+}
+.gallery-card img,
+.gallery-empty {
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+}
+.gallery-name {
+  font-weight: 600;
+}
+.gallery-card .muted {
+  font-size: 0.8125rem;
+}
+.flip {
+  transform: rotate(180deg);
 }

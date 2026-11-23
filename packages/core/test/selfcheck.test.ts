@@ -107,3 +107,12 @@ void test('out-of-range values still build a mesh', async () => {
     assert.ok(volume(buildPositions(model.spec)) > 0, `${kind} ${field} ${value}`);
   }
 });
+
+void test('size presets scale only the dimensions the prompt leaves out', () => {
+  const small = parsePrompt('vase 100 tall', undefined, 'small').spec;
+  const large = parsePrompt('vase 100 tall', undefined, 'large').spec;
+  assert.equal(small.height, 100);
+  assert.equal(large.height, 100);
+  assert.ok(small.width < newSpec('vase').width && newSpec('vase').width < large.width);
+  assert.equal(large.wall, newSpec('vase').wall);
+});

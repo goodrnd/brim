@@ -19,7 +19,8 @@ import {buildPositions, describe, fits, size, toStl, volume, type Model} from '@
 import type {Material, Printer, SliceResult, SliceSettings} from '@brim/core/slicer.ts';
 import {
   ArrowBackIcon,
-  AutoFixHighIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   ContentCopyIcon,
   DeleteIcon,
   DownloadIcon,
@@ -36,14 +37,6 @@ import {download} from '../lib/download.ts';
 import {RenameButton} from '../ui/controls.tsx';
 import {Viewer} from './Viewer.tsx';
 
-const examples = [
-  'twisted vase 120 tall, 70 wide, 2mm walls, 12 ribs',
-  'gear with 24 teeth, 50mm diameter, 6mm thick, 5mm hole',
-  'box 80 x 50 x 30 with 2mm walls and 6mm corners',
-  'keychain tag 50 x 20 x 3 with a hole',
-  '5 point star 60 wide, 6 thick',
-  'planter 90 wide 80 tall tapered',
-];
 const tweaks = [
   'make it taller',
   'thicker walls',
@@ -55,10 +48,11 @@ const tweaks = [
   'no twist',
 ];
 
-export const sections = ['design', 'refine', 'print'];
+export const sections = ['refine', 'print'];
 const slug = (m: Model) => (m.type === 'mesh' ? m.name : m.spec.kind + '-' + Math.round(m.spec.width) + 'mm');
+const build = (m: Model) => (m.type === 'param' ? buildPositions(m.spec) : m.positions);
 
-/** One part: its overview, or one of the design / refine / print sections. */
+/** One part: its overview, or its refine / print section. New parts start in the Designer. */
 export function PartPage(props: {
   part: Part;
   /** Shown as a back link when the part is in exactly one project. */
@@ -68,7 +62,7 @@ export function PartPage(props: {
   section?: string;
   /** `touch` marks a design change or rename, which updates `edited`. */
   setPart: (f: (p: Part) => Part, touch?: boolean) => void;
-  onPrompt: (prompt: string, refine: boolean) => Promise<void>;
+  onPrompt: (prompt: string) => Promise<void>;
   onDuplicate: () => void;
   onDelete: () => void;
   onProjects: (ids: Array<string>) => void;
@@ -83,9 +77,16 @@ export function PartPage(props: {
   const {part, project, projects, partProjects, section, setPart, onPrompt, onDuplicate, onDelete} = props;
   const {onProjects, onNewProject, printers, materials, settings, setSettings, onQueue, theme} = props;
   const current = part.history.at(-1)!;
-  const positions = useMemo(
-    () => (current.model.type === 'param' ? buildPositions(current.model.spec) : current.model.positions),
-    [current],
+  const last = part.history.length - 1;
+  // [step, history length]: a new entry makes it stale, so the view jumps back to the latest step.
+  const [view, setView] = useState<[number, number]>();
+  const step = section === 'refine' && view?.[1] === part.history.length ? view[0] : last;
+  const setStep = (i: number) => setView([Math.max(0, Math.min(last, i)), part.history.length]);
+  const shown = part.history[step];
+  const positions = useMemo(() => build(current.model), [current]);
+  const shownPositions = useMemo(
+    () => (shown === current ? positions : build(shown.model)),
+    [shown, current, positions],
   );
   const printer = printers[settings.printer];
   const setSection = (s: string) => go(`part/${part.id}/${s}`);
@@ -107,21 +108,17 @@ export function PartPage(props: {
         <Grid.Item span={{base: 'full', medium: 7}}>
           <Stack gap="small" align="stretch">
             <Viewer
-              positions={positions}
+              positions={shownPositions}
               bed={[printer.bed[0], printer.bed[1]]}
               theme={theme}
-              onSnapshot={(thumb) => setPart((p) => ({...p, thumb}))}
+              onSnapshot={step === last ? (thumb) => setPart((p) => ({...p, thumb})) : undefined}
             />
-            <ModelFacts positions={positions} printer={printer} />
+            <ModelFacts positions={shownPositions} printer={printer} />
           </Stack>
         </Grid.Item>
         <Grid.Item span={{base: 'full', medium: 5}}>
           <Tabs.Root value={section} onValueChange={(v) => setSection(v as string)}>
             <Tabs.List aria-label="Workflow" className="sections">
-              <Tabs.Tab value="design">
-                <AutoFixHighIcon />
-                Design
-              </Tabs.Tab>
               <Tabs.Tab value="refine">
                 <TuneIcon />
                 Refine
@@ -132,17 +129,6 @@ export function PartPage(props: {
               </Tabs.Tab>
               <Tabs.Indicator className="sections-indicator" />
             </Tabs.List>
-            <Tabs.Panel value="design" className="panel">
-              <PromptBox
-                key="design"
-                label="Describe the part"
-                placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
-                action="Generate STL"
-                icon={<AutoFixHighIcon />}
-                chips={examples}
-                onSubmit={(p) => onPrompt(p, false).then(() => setSection('refine'))}
-              />
-            </Tabs.Panel>
             <Tabs.Panel value="refine" className="panel">
               <Stack gap="large" align="stretch">
                 <PromptBox
@@ -152,10 +138,12 @@ export function PartPage(props: {
                   action="Improve"
                   icon={<TuneIcon />}
                   chips={tweaks}
-                  onSubmit={(p) => onPrompt(p, true)}
+                  onSubmit={onPrompt}
                 />
                 <History
                   history={part.history}
+                  step={step}
+                  onStep={setStep}
                   onUndo={() => setHistory((h) => (h.length > 1 ? h.slice(0, -1) : h))}
                   onRestore={(i) =>
                     setHistory((h) => [...h, {...h[i], prompt: `Back to step ${i + 1}`, changes: [h[i].prompt]}])
@@ -240,9 +228,6 @@ export function PartPage(props: {
             />
             <Specs part={part} positions={positions} printer={printer} />
             <Stack direction="row" gap="small" wrap="wrap">
-              <Button hierarchy="secondary" iconStart={<AutoFixHighIcon />} onClick={() => setSection('design')}>
-                Design
-              </Button>
               <Button hierarchy="secondary" iconStart={<TuneIcon />} onClick={() => setSection('refine')}>
                 Refine
               </Button>
@@ -277,32 +262,6 @@ export function PartPage(props: {
           <Text className="muted">Not used in any project yet.</Text>
         )}
       </Stack>
-    </Stack>
-  );
-}
-
-export function NewPart({project, onSubmit}: {project?: Project; onSubmit: (prompt: string) => Promise<void>}) {
-  return (
-    <Stack gap="xLarge" align="stretch">
-      <PageHeader.Root>
-        <PageHeader.Row>
-          <PageHeader.Title level={1}>New part</PageHeader.Title>
-        </PageHeader.Row>
-        <PageHeader.Description>
-          {project ? `In ${project.name}. ` : ''}Describe what you want to print, or start from an example.
-        </PageHeader.Description>
-      </PageHeader.Root>
-      <div className="editor">
-        <PromptBox
-          autoFocus
-          label="Describe the part"
-          placeholder="e.g. hex nut 20 wide 8 thick with a 10mm hole"
-          action="Generate part"
-          icon={<AutoFixHighIcon />}
-          chips={examples}
-          onSubmit={onSubmit}
-        />
-      </div>
     </Stack>
   );
 }
@@ -366,10 +325,14 @@ function PromptBox(props: {
 
 function History({
   history,
+  step,
+  onStep,
   onUndo,
   onRestore,
 }: {
   history: Array<Entry>;
+  step: number;
+  onStep: (i: number) => void;
   onUndo: () => void;
   onRestore: (i: number) => void;
 }) {
@@ -389,14 +352,65 @@ function History({
           Undo
         </Button>
       </Stack>
+      {history.length > 1 && (
+        <Stack gap="xSmall" align="stretch">
+          <Stack direction="row" gap="small" align="center">
+            <IconButton aria-label="Previous step" disabled={step === 0} onClick={() => onStep(step - 1)}>
+              <ChevronLeftIcon />
+            </IconButton>
+            <input
+              type="range"
+              className="steps"
+              min={0}
+              max={history.length - 1}
+              value={step}
+              onChange={(e) => onStep(e.currentTarget.valueAsNumber)}
+              aria-label="Step"
+              aria-valuetext={`Step ${step + 1} of ${history.length}`}
+            />
+            <IconButton aria-label="Next step" disabled={step === history.length - 1} onClick={() => onStep(step + 1)}>
+              <ChevronRightIcon />
+            </IconButton>
+          </Stack>
+          <Stack direction="row" gap="auto" align="center">
+            <Text className="muted">
+              Step {step + 1} of {history.length}
+              {step === history.length - 1 ? ' · latest' : ''}
+            </Text>
+            {step < history.length - 1 && (
+              <Stack direction="row" gap="xSmall">
+                <Button hierarchy="secondary" density="compact" onClick={() => onStep(history.length - 1)}>
+                  Back to latest
+                </Button>
+                <Button density="compact" iconStart={<RestartAltIcon />} onClick={() => onRestore(step)}>
+                  Restore this step
+                </Button>
+              </Stack>
+            )}
+          </Stack>
+        </Stack>
+      )}
       <ol className="history" reversed>
         {history
           .map((h, i) => ({h, i}))
           .reverse()
           .map(({h, i}) => (
-            <li key={i}>
+            <li key={i} className={i === step ? 'current' : undefined} aria-current={i === step ? 'step' : undefined}>
               <Stack direction="row" gap="auto" align="start">
-                <Stack gap="xSmall">
+                <Stack
+                  gap="xSmall"
+                  className="history-step"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Show step ${i + 1}`}
+                  onClick={() => onStep(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onStep(i);
+                    }
+                  }}
+                >
                   <Text>
                     <InlineCode>{h.prompt}</InlineCode>
                   </Text>

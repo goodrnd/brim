@@ -1,7 +1,7 @@
 // LLM intent layer: prompt + current model → Spec or Op[]. Runs server-side (vite.config.ts); the LLM never returns mesh data.
 import {type AssistantMessage, type Context, type Tool, validateToolCall} from '@earendil-works/pi-ai';
 import {arr, num, obj, oneOf, opt, type Static} from '@earendil-works/pi-schema';
-import {kinds, newSpec, numFields, type Op, type Spec} from './model.ts';
+import {kinds, newSpec, numFields, type Op, type Size, type Spec} from './model.ts';
 
 /** What the client sends: the current model, if any. Meshes are summarised; their triangles stay in the browser. */
 export type Current = {type: 'param'; spec: Spec} | {type: 'mesh'; name: string; size: Array<number>};
@@ -86,8 +86,41 @@ export function buildContext(prompt: string, current?: Current): Context {
   };
 }
 
+export const feedbackPrompt = `You review plans for 3D-printable parts before they are printed on a hobby FDM printer.
+You get the user's request and the parametric spec planned from it (mm; wall 0 = solid, hole 0 = none, taper = top scale).
+Reply in plain text, at most 4 short bullet points, most important first:
+- whether the spec matches what the user asked for, and any value that looks off
+- printability: walls under 0.8 mm, overhangs, thin features, parts too small or too big
+- one concrete improvement, with the field and value to change
+If the plan looks good, say so in one line. No preamble.`;
+
+export function feedbackContext(prompt: string, spec: Spec): Context {
+  return {
+    systemPrompt: feedbackPrompt,
+    messages: [{role: 'user', content: `Request: ${prompt}\nPlan: ${JSON.stringify(spec)}`, timestamp: Date.now()}],
+  };
+}
+
+/** The reviewer's text reply. Throws when the call failed or came back empty. */
+export function readFeedback(msg: Pick<AssistantMessage, 'stopReason' | 'errorMessage' | 'content'>): string {
+  if (msg.stopReason === 'error' || msg.stopReason === 'aborted') {
+    throw new Error(msg.errorMessage ?? msg.stopReason);
+  }
+  const text = msg.content
+    .flatMap((b) => (b.type === 'text' ? [b.text] : []))
+    .join('')
+    .trim();
+  if (!text) {
+    throw new Error('model gave no feedback');
+  }
+  return text;
+}
+
 /** Validates the model's tool call and turns it into an Intent. Throws with a reason when it does not check out. */
-export function readIntent(msg: Pick<AssistantMessage, 'stopReason' | 'errorMessage' | 'content'>): Intent {
+export function readIntent(
+  msg: Pick<AssistantMessage, 'stopReason' | 'errorMessage' | 'content'>,
+  size: Size = 'medium',
+): Intent {
   if (msg.stopReason === 'error' || msg.stopReason === 'aborted') {
     throw new Error(msg.errorMessage ?? msg.stopReason);
   }
@@ -97,19 +130,19 @@ export function readIntent(msg: Pick<AssistantMessage, 'stopReason' | 'errorMess
   }
   const args = validateToolCall(tools, call);
   if (call.name === 'new_shape') {
-    return {type: 'spec', spec: toSpec(args)};
+    return {type: 'spec', spec: toSpec(args, size)};
   }
   return {type: 'ops', ops: (args.ops as Array<OpArgs>).map(toOp)};
 }
 
-function toSpec(args: ShapeArgs): Spec {
+function toSpec(args: ShapeArgs, size: Size = 'medium'): Spec {
   const {kind, ...rest} = args;
   for (const [k, v] of Object.entries(rest)) {
     if (!(v! >= 0)) {
       throw new Error(`${k} must be ≥ 0`);
     }
   }
-  return newSpec(kind, rest);
+  return newSpec(kind, rest, size);
 }
 
 function toOp(o: OpArgs): Op {

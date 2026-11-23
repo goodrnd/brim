@@ -13,6 +13,7 @@ import lefosCss from '@earendil-works/design-tokens/lefos.css?url';
 import {useEffect, useState} from 'react';
 import {
   AccountCircleIcon,
+  AutoFixHighIcon,
   BorderClearIcon,
   BorderOuterIcon,
   DarkModeIcon,
@@ -23,8 +24,7 @@ import {
   ScheduleIcon,
   SettingsIcon,
 } from './ui/icons.ts';
-import {applyOps, describe, editMesh, finalize, parsePrompt, size, type Model} from '@brim/core/model.ts';
-import type {Current, Intent} from '@brim/core/intent.ts';
+import {applyOps, describe, editMesh, finalize, parsePrompt, type Model} from '@brim/core/model.ts';
 import {
   materials as stockMaterials,
   printers as stockPrinters,
@@ -35,14 +35,17 @@ import {
 import {Home} from './home/Home.tsx';
 import {Jobs, type Job} from './jobs/Jobs.tsx';
 import {Library} from './library/Library.tsx';
-import {NewPart, PartPage, sections} from './parts/Part.tsx';
+import {PartPage, sections} from './parts/Part.tsx';
+import {Designer} from './designer/Designer.tsx';
 import {Settings} from './settings/Settings.tsx';
 import {AccountSettings, demoAccount, Login, type Account} from './settings/Account.tsx';
 import {go, useRoute} from './lib/route.ts';
 import {useStored} from './lib/store.ts';
 import {parseMesh} from './lib/mesh.ts';
+import {askLlm} from './lib/intent.ts';
 import {
   count,
+  autoName,
   itemsIn,
   projectsOf,
   removePart,
@@ -109,31 +112,6 @@ function useBorders() {
   return [borders, setBorders] as const;
 }
 
-/** Asks the dev server's LLM; undefined when none is configured or it fails, so callers use the regex parser. */
-async function askLlm(prompt: string, m?: Model): Promise<Intent | undefined> {
-  const current: Current | undefined = !m
-    ? undefined
-    : m.type === 'param'
-      ? m
-      : {type: 'mesh', name: m.name, size: size(m.positions)};
-  try {
-    const r = await fetch('/api/intent', {
-      method: 'POST',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify({prompt, current}),
-    });
-    if (r.ok) {
-      return await r.json();
-    }
-    if (r.status !== 404) {
-      // oxlint-disable-next-line no-console
-      console.warn('brim: LLM intent failed, using the regex parser:', await r.text());
-    }
-  } catch {
-    // offline or server down: fall back to the regex parser
-  }
-}
-
 /** Resolves a prompt to the next history entry, via the LLM when available. */
 async function resolve(prompt: string, m?: Model): Promise<Entry> {
   const intent = await askLlm(prompt, m);
@@ -178,15 +156,15 @@ export function App() {
   const [notes, setNotes] = useStored<Array<Note>>('brim-notes', () => []);
   const [uses, setUses] = useStored<Array<Use>>('brim-uses', () => []);
   const route = useRoute();
-  // Old #/model/, #/queue and #/projects links still open.
-  const old = {model: 'part', queue: 'jobs', projects: 'library'};
+  // Old #/model/, #/queue, #/projects and #/new links still open.
+  const old = {model: 'part', queue: 'jobs', projects: 'library', new: 'design'};
   const page = (Object.hasOwn(old, route[0] ?? '') ? old[route[0] as keyof typeof old] : route[0]) ?? 'home';
   const libraryTab = route[0] === 'projects' || (page === 'library' && route[1] === 'projects') ? 'projects' : 'parts';
   const part = page === 'part' ? parts.find((p) => p.id === route[1]) : undefined;
   const partProjects = part ? projectsOf(part.id, uses).filter((id) => projects.some((p) => p.id === id)) : [];
   // A part page links back to its project only when there is just one.
   const project = projects.find(
-    (p) => p.id === (page === 'project' || page === 'new' ? route[1] : partProjects.length === 1 && partProjects[0]),
+    (p) => p.id === (page === 'project' || page === 'design' ? route[1] : partProjects.length === 1 && partProjects[0]),
   );
   const projectParts = (id: string) => ((ids) => parts.filter((p) => ids.has(p.id)))(itemsIn(id, uses));
   // shortcut: window.prompt for the name; swap for a Modal like RenameButton if it feels rough.
@@ -222,8 +200,9 @@ export function App() {
   const setPart = (id: string, f: (p: Part) => Part, touch?: boolean) =>
     setParts((ps) => ps.map((p) => (p.id === id ? {...f(p), ...(touch && {edited: Date.now()})} : p)));
   const create = (p: Omit<Part, 'id' | 'edited'>, projectIds: Array<string> = []) => {
+    const mesh = p.history[0].model.type === 'mesh';
     // oxlint-disable-next-line react/purity -- event handler, not render
-    const next = {...p, id: crypto.randomUUID(), edited: Date.now()};
+    const next = {...p, name: p.name ?? (mesh ? undefined : autoName()), id: crypto.randomUUID(), edited: Date.now()};
     setParts((ps) => [next, ...ps]);
     setUses((us) => withProjects(next.id, projectIds, us));
     go(`part/${next.id}/refine`);
@@ -255,13 +234,11 @@ export function App() {
   };
   const printer = printers[sliceSettings.printer];
 
-  /** New design prompt (replaces the model, or creates a part) or a refinement of the current model. */
-  const onPrompt = async (prompt: string, refine: boolean) => {
-    const e = await resolve(prompt, refine ? part?.history.at(-1)?.model : undefined);
+  /** A refinement of the open part. */
+  const onPrompt = async (prompt: string) => {
     if (part) {
+      const e = await resolve(prompt, part.history.at(-1)!.model);
       setPart(part.id, (p) => ({...p, history: [...p.history, e]}), true);
-    } else {
-      create({history: [e]}, project ? [project.id] : []);
     }
   };
   const upload = async (file: File, projectId?: string) => {
@@ -356,6 +333,7 @@ export function App() {
                     {(
                       [
                         ['home', 'Home', HomeIcon],
+                        ['design', 'Designer', AutoFixHighIcon],
                         ['library', 'Library', Inventory2Icon],
                         [
                           'jobs',
@@ -372,7 +350,7 @@ export function App() {
                           active={
                             page === v ||
                             (v === 'jobs' && page === 'job') ||
-                            (v === 'library' && (page === 'part' || page === 'project' || page === 'new'))
+                            (v === 'library' && (page === 'part' || page === 'project'))
                           }
                         >
                           {label}
@@ -410,8 +388,15 @@ export function App() {
         </Sidebar.Root>
 
         <main className="main">
-          {page === 'new' ? (
-            <NewPart project={project} onSubmit={(p) => onPrompt(p, false)} />
+          {page === 'design' ? (
+            <Designer
+              project={project}
+              recent={[...parts].sort((a, b) => (b.edited ?? 0) - (a.edited ?? 0)).slice(0, 3)}
+              printer={printer}
+              theme={applied}
+              onCreate={(e) => create({history: [e]}, project ? [project.id] : [])}
+              onUpload={(f) => upload(f, project?.id)}
+            />
           ) : page === 'project' ? (
             project ? (
               <ProjectPage

@@ -1,4 +1,5 @@
 // Parts, projects, notes and uses; see docs/domain.md. Kept as flat lists so they map 1:1 to the planned server tables.
+import {joyful} from 'joyful';
 import type {Model} from '@brim/core/model.ts';
 
 /** One step in a part's history: a full snapshot. */
@@ -16,6 +17,12 @@ export interface Part {
   history: Array<Entry>;
   edited?: number; // ms timestamp of the last design change or rename
 }
+
+/** Random friendly name for a new part, e.g. "Jumping fox". */
+export const autoName = () => {
+  const n = joyful({pattern: ['adjective', 'animal'], separator: ' '});
+  return n[0].toUpperCase() + n.slice(1);
+};
 
 export const title = (p: Part) =>
   p.name || ((m) => (m.type === 'mesh' ? m.name : 'Untitled ' + m.spec.kind))(p.history.at(-1)!.model);

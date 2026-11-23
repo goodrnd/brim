@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  autoName,
   itemsIn,
   projectsOf,
   removePart,
@@ -55,4 +56,8 @@ void test('removing a part drops its uses in every project', () => {
     ['2'],
   );
   assert.deepEqual(r.uses, [use('a', '2')]);
+});
+
+void test('autoName is a capitalised adjective and animal', () => {
+  assert.match(autoName(), /^[A-Z][a-z]+ [a-z]+$/);
 });
