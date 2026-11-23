@@ -15,15 +15,16 @@ jobs:
   review:
     # Comment trigger is limited to people with repo access: each run spends API credits and exposes the key to the model.
     if: >-
-      (github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
-      (github.event.issue.pull_request && startsWith(github.event.comment.body, '/review') &&
+      (github.event_name == 'pull_request' && !github.event.pull_request.draft &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event.issue.pull_request &&
+       (github.event.comment.body == '/review' || startsWith(github.event.comment.body, '/review ')) &&
        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
       group: pi-review-${{ github.event.pull_request.number || github.event.issue.number }}
     env:
-      GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
       - uses: actions/setup-node@v4
@@ -37,14 +38,18 @@ jobs:
         with:
           ref: refs/pull/${{ env.PR_NUMBER }}/head
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Build prompt
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           BASE_REF=$(gh pr view "$PR_NUMBER" --json baseRefName -q .baseRefName)
           PR_TITLE=$(gh pr view "$PR_NUMBER" --json title -q .title)
           git diff "origin/$BASE_REF...HEAD" > "$RUNNER_TEMP/pr.diff"
           {
-            cat .github/pi-review/RUBRIC.md
+            # Rubric from the base branch so a PR can't rewrite the reviewer's instructions.
+            git show "origin/$BASE_REF:.github/pi-review/RUBRIC.md"
             printf '\n\n---\n\nPlease perform a code review with the following focus:\n\n'
             printf 'Review pull request #%s ("%s") against the base branch '"'"'%s'"'"'. ' "$PR_NUMBER" "$PR_TITLE" "$BASE_REF"
             printf 'The full diff is in `%s`; read it, then read the touched files for context. Provide prioritized, actionable findings.\n' "$RUNNER_TEMP/pr.diff"
@@ -54,6 +59,7 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         # Read-only tools, no project extensions: the PR is untrusted and could prompt-inject a bash call that leaks the key.
+        # `read` can still reach /proc/self/environ, so the comment step checks the output for the key.
         run: |
           pi --print --no-session --no-approve --no-extensions \
             --model "${{ vars.PI_REVIEW_MODEL || 'opencode-go/deepseek-v4.1-flash' }}" \
@@ -62,6 +68,17 @@ jobs:
           test -s "$RUNNER_TEMP/review.md"
 
       - name: Comment on PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
+          # Refuse to post if any 12-char slice of the key appears (prompt-injected exfiltration).
+          # shortcut: misses encoded/split leaks (base64, spaced), move the key behind a proxy if that matters.
+          for ((i = 0; i + 12 <= ${#OPENCODE_API_KEY}; i++)); do
+            if grep -qF -- "${OPENCODE_API_KEY:i:12}" "$RUNNER_TEMP/review.md"; then
+              echo "::error::review output contains part of OPENCODE_API_KEY; not posting"
+              exit 1
+            fi
+          done
           { echo '## pi review'; echo; cat "$RUNNER_TEMP/review.md"; } > "$RUNNER_TEMP/comment.md"
           gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/comment.md" --edit-last --create-if-none
