@@ -1,0 +1,67 @@
+name: pi review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  # Comment "/review" on any PR to (re)run. Uses the workflow file from the default branch.
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    # Comment trigger is limited to people with repo access: each run spends API credits and exposes the key to the model.
+    if: >-
+      (github.event_name == 'pull_request' && !github.event.pull_request.draft) ||
+      (github.event.issue.pull_request && startsWith(github.event.comment.body, '/review') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: pi-review-${{ github.event.pull_request.number || github.event.issue.number }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Install before checkout so a PR-supplied .npmrc can't redirect the registry.
+      - run: npm install -g @earendil-works/pi-coding-agent@1.6.0
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ env.PR_NUMBER }}/head
+          fetch-depth: 0
+
+      - name: Build prompt
+        run: |
+          BASE_REF=$(gh pr view "$PR_NUMBER" --json baseRefName -q .baseRefName)
+          PR_TITLE=$(gh pr view "$PR_NUMBER" --json title -q .title)
+          git diff "origin/$BASE_REF...HEAD" > "$RUNNER_TEMP/pr.diff"
+          {
+            cat .github/pi-review/RUBRIC.md
+            printf '\n\n---\n\nPlease perform a code review with the following focus:\n\n'
+            printf 'Review pull request #%s ("%s") against the base branch '"'"'%s'"'"'. ' "$PR_NUMBER" "$PR_TITLE" "$BASE_REF"
+            printf 'The full diff is in `%s`; read it, then read the touched files for context. Provide prioritized, actionable findings.\n' "$RUNNER_TEMP/pr.diff"
+          } > "$RUNNER_TEMP/prompt.md"
+
+      - name: Run pi
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        # Read-only tools, no project extensions: the PR is untrusted and could prompt-inject a bash call that leaks the key.
+        run: |
+          pi --print --no-session --no-approve --no-extensions \
+            --model "${{ vars.PI_REVIEW_MODEL || 'opencode-go/deepseek-v4.1-flash' }}" \
+            --tools read,grep,find,ls \
+            "@$RUNNER_TEMP/prompt.md" > "$RUNNER_TEMP/review.md"
+          test -s "$RUNNER_TEMP/review.md"
+
+      - name: Comment on PR
+        run: |
+          { echo '## pi review'; echo; cat "$RUNNER_TEMP/review.md"; } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/comment.md" --edit-last --create-if-none
