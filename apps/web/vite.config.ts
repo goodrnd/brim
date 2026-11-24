@@ -1,10 +1,15 @@
+import {mkdir} from 'node:fs/promises';
 import type {IncomingMessage, ServerResponse} from 'node:http';
+import {join, resolve} from 'node:path';
 import {defineConfig, loadEnv, type Plugin} from 'vite';
 import react from '@vitejs/plugin-react';
 import {createIntent} from '@brim/core/llm.ts';
 import type {Current, Intent} from '@brim/core/intent.ts';
 import {sizes, type Size, type Spec} from '@brim/core/model.ts';
 import {printersApi} from '@brim/printer/api.ts';
+import {storeApi} from '@brim/store/api.ts';
+import {bucket} from '@brim/store/bucket.ts';
+import {openDb} from '@brim/store/db.ts';
 
 /**
  * POST /api/intent {prompt, current, size} → Intent; POST /api/feedback {prompt, spec} → text review of the plan.
@@ -24,6 +29,12 @@ const setup: Plugin['configureServer'] = async (server) => {
   const printers = printersApi();
   server.middlewares.use('/api/printers', printers.middleware);
   server.httpServer?.on('close', () => void printers.close());
+  // Data dir: the SQLite db and the local file bucket. BRIM_DATA overrides; relative to the repo root.
+  const data = resolve(import.meta.dirname, '../..', process.env.BRIM_DATA || '.brim');
+  await mkdir(data, {recursive: true});
+  const db = await openDb(join(data, 'brim.db'));
+  server.middlewares.use(storeApi(db, bucket(join(data, 'files'))));
+  server.httpServer?.on('close', () => void db.destroy());
   const post =
     (answer: (body: Body, run: NonNullable<typeof llm>) => Promise<Intent | string>) =>
     async (req: IncomingMessage, res: ServerResponse) => {

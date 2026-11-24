@@ -36,6 +36,7 @@ An npm workspace:
 - `apps/web`: the React app.
 - `packages/core` (`@brim/core`): geometry, ops, intent and slicer. Pure TypeScript, runs in the browser and Node.
 - `packages/printer` (`@brim/printer`): Brim's connection to Bambu printers. It runs [bambu-printer-mcp](https://github.com/DMontgomery40/bambu-printer-mcp) as a child process and calls its tools: discover, slice, print, progress, filaments, pause, resume, cancel. `api.ts` is the dev server's `/api/printers` (discover, connect, live status). Node only.
+- `packages/store` (`@brim/store`): the server's storage. A SQLite database through [Kysely](https://kysely.dev) on Node's built-in `node:sqlite` holds parts, projects, notes, jobs and profiles; a local bucket holds file bytes and mesh triangles, named by sha256. Both live in `.brim/` at the repo root (`BRIM_DATA` overrides; delete it to start over). `api.ts` is the dev server's `/api/state`, `/api/blobs` and `/api/files`. On the first visit the web app imports what this browser had in localStorage. Node only.
 - `apps/simulator` (`@brim/simulator`): a simulated Bambu printer, for developing without hardware (see below).
 
 The domain vocabulary is in [docs/domain.md](docs/domain.md). Run the commands below from the repo root.
@@ -79,7 +80,7 @@ bambu-printer-mcp sends X2D prints and controls through Bambu's closed networkin
 
 The simulator also announces itself on the LAN the way a real printer does (SSDP on UDP 2021, from this machine's LAN address; `SIM_SSDP=0` turns that off). So in `npm run dev`, Settings → **Find printers** lists it; connect with access code `12345678` to see its live status and AMS spools. Real Bambu printers show up the same way; their access code is on the printer's screen. Brim keeps the code in the dev server's memory only, so after a restart you connect again. Bambu Studio holds UDP 2021 while it runs, so close it to discover.
 
-`npm run test:e2e` runs that path end to end without a browser: it starts the simulator and the dev server, discovers the printer, connects (a wrong code is refused) and reads its status. It needs the ports above plus UDP 2021 free and a private LAN address; `npm test` leaves it out.
+`npm run test:e2e` runs that path end to end without a browser: it starts the simulator and the dev server, discovers the printer, connects (a wrong code is refused) and reads its status. It needs the ports above plus UDP 2021 free and a private LAN address; `npm test` leaves it out. The same command also runs the storage tests, which drive the web app in Chromium against a dev server with a temporary `BRIM_DATA`: parts (imported meshes too), projects, notes and files survive a reload, and old browser storage is imported once. Install the browser once with `npx playwright install chromium-headless-shell`.
 
 `npm run test:sim` slices a cube with Bambu Studio and prints it on the simulated X2D through bambu-printer-mcp. It needs Bambu Studio and the ports above free, so stop `npm run simulator` first; `npm test` leaves it out.
 

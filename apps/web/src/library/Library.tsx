@@ -1,13 +1,14 @@
 import {Button, EmptyState, PageHeader, Stack, Tabs} from '@earendil-works/elanor-react';
 import {describe} from '@brim/core/model.ts';
-import {AddIcon, FolderOpenIcon, ViewInArIcon} from '../ui/icons.ts';
+import {AddIcon, DescriptionIcon, FolderOpenIcon, ViewInArIcon} from '../ui/icons.ts';
+import {Files} from './Files.tsx';
 import {count, edited, itemsIn, title, type Note, type Part, type Project, type Use} from '../lib/library.ts';
 import {go} from '../lib/route.ts';
 import {ListItem, UploadButton} from '../ui/controls.tsx';
 
-/** Parts and Projects, one tab at a time. Parts are the things; Projects only reference them. */
+/** Parts, Files and Projects, one tab at a time. Parts and Files are the things; Projects only reference them. */
 export function Library(props: {
-  tab: 'parts' | 'projects';
+  tab: 'parts' | 'files' | 'projects';
   parts: Array<Part>;
   projects: Array<Project>;
   notes: Array<Note>;
@@ -29,7 +30,7 @@ export function Library(props: {
                   New part
                 </Button>
               </>
-            ) : (
+            ) : tab === 'files' ? null : (
               <Button iconStart={<AddIcon />} onClick={props.onNewProject}>
                 New project
               </Button>
@@ -39,14 +40,20 @@ export function Library(props: {
         <PageHeader.Description>
           {tab === 'parts'
             ? 'Parts are the printable things, each with its own design history. One part can be used in many projects.'
-            : 'Projects group parts and notes for something you are making. They point to parts, not copies: editing a part changes it in every project.'}
+            : tab === 'files'
+              ? 'Files are reference material kept exactly as uploaded: photos, PDFs, datasheets, other people’s models.'
+              : 'Projects group parts and notes for something you are making. They point to parts, not copies: editing a part changes it in every project.'}
         </PageHeader.Description>
       </PageHeader.Root>
-      <Tabs.Root value={tab} onValueChange={(v) => go(v === 'parts' ? 'library' : 'library/projects')}>
+      <Tabs.Root value={tab} onValueChange={(v) => go(v === 'parts' ? 'library' : `library/${v}`)}>
         <Tabs.List aria-label="Library" className="sections">
           <Tabs.Tab value="parts">
             <ViewInArIcon />
             Parts ({parts.length})
+          </Tabs.Tab>
+          <Tabs.Tab value="files">
+            <DescriptionIcon />
+            Files
           </Tabs.Tab>
           <Tabs.Tab value="projects">
             <FolderOpenIcon />
@@ -57,6 +64,8 @@ export function Library(props: {
       </Tabs.Root>
       {tab === 'projects' ? (
         <ProjectList {...props} />
+      ) : tab === 'files' ? (
+        <Files onMakePart={props.onUpload} />
       ) : parts.length ? (
         <PartList parts={parts} />
       ) : (
@@ -98,7 +107,7 @@ export function PartList({parts}: {parts: Array<Part>}) {
             thumb={p.thumb}
             title={title(p)}
             lines={[
-              m.type === 'param' ? describe(m.spec) : 'Imported mesh · not saved',
+              m.type === 'param' ? describe(m.spec) : 'Imported mesh',
               [edited(p.edited), count(p.history.length, 'step')].filter(Boolean).join(' · '),
             ]}
           />

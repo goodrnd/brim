@@ -43,12 +43,14 @@ Printer · Material         profiles
 
 ## Status
 
-Built (browser storage): Part, Entry, Job, Printer, Material, Project, Note, Use (Parts only; `qty` has no UI yet and is always 1). Notes are plain text for now. Bambu Printers can be found on the LAN and connected for live status; access codes are re-entered after a server restart.
+Built: Part, Entry, Job, Printer, Material, Project, Note, Use (Parts only; `qty` has no UI yet and is always 1), File. Notes are plain text for now. Bambu Printers can be found on the LAN and connected for live status; access codes are re-entered after a server restart.
 
-Next: Component. Planned with the backend: File, plus:
+Storage (`@brim/store`): the dev server keeps everything in SQLite (Kysely on `node:sqlite`) and file bytes in a local bucket named by sha256, both in `.brim/`. A mesh Entry stores its triangles in the bucket and names them by `sha256`. On the first visit the browser's localStorage is imported once. A static build without the server still uses localStorage and drops mesh entries.
+
+Next: Component, plus:
 
 - Entry gets `id`, `at` and `source` (`web` | `mcp`).
-- Mesh positions move to a hash-addressed blob store; today mesh entries are dropped on save.
+- Uses of Files (a File in a Project).
 - Job gets the shape below: it names the Entry and the exact file it printed, keeps the printer and spools it used, and copies the run from bambu-printer-mcp. The MCP keeps only its last ten flight records, so Brim is the long-term history.
 
 ```ts

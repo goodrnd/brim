@@ -30,3 +30,4 @@ export {LoginIcon} from '@earendil-works/elanor-icons-react/login';
 export {LogoutIcon} from '@earendil-works/elanor-icons-react/logout';
 export {AccountCircleIcon} from '@earendil-works/elanor-icons-react/account-circle';
 export {ExpandMoreIcon} from '@earendil-works/elanor-icons-react/expand-more';
+export {DescriptionIcon} from '@earendil-works/elanor-icons-react/description';

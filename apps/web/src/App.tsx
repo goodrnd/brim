@@ -60,7 +60,7 @@ import {
 } from './lib/library.ts';
 import {ProjectPage} from './projects/Projects.tsx';
 
-// shortcut: imported meshes are not saved and thumbnails share the ~5 MB localStorage quota; move to IndexedDB if people import a lot or keep hundreds of parts.
+// Without the dev server (a static build) imported meshes are not saved, and thumbnails share the ~5 MB localStorage quota.
 const storable = (ps: Array<Part>) =>
   ps.flatMap((p) => {
     const history = p.history.filter((e) => e.model.type === 'param');
@@ -159,7 +159,12 @@ export function App() {
   // Old #/model/, #/queue, #/projects and #/new links still open.
   const old = {model: 'part', queue: 'jobs', projects: 'library', new: 'design'};
   const page = (Object.hasOwn(old, route[0] ?? '') ? old[route[0] as keyof typeof old] : route[0]) ?? 'home';
-  const libraryTab = route[0] === 'projects' || (page === 'library' && route[1] === 'projects') ? 'projects' : 'parts';
+  const libraryTab =
+    route[0] === 'projects' || (page === 'library' && route[1] === 'projects')
+      ? 'projects'
+      : page === 'library' && route[1] === 'files'
+        ? 'files'
+        : 'parts';
   const part = page === 'part' ? parts.find((p) => p.id === route[1]) : undefined;
   const partProjects = part ? projectsOf(part.id, uses).filter((id) => projects.some((p) => p.id === id)) : [];
   // A part page links back to its project only when there is just one.
@@ -447,9 +452,7 @@ export function App() {
                 <EmptyState.Body>
                   <EmptyState.Copy>
                     <EmptyState.Title level={1}>Part not found</EmptyState.Title>
-                    <EmptyState.Description>
-                      It may have been deleted, or it was an imported model from an earlier visit.
-                    </EmptyState.Description>
+                    <EmptyState.Description>It may have been deleted.</EmptyState.Description>
                   </EmptyState.Copy>
                   <EmptyState.Actions>
                     <Button onClick={() => go('library')}>Back to Library</Button>
