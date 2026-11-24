@@ -36,10 +36,10 @@ An npm workspace:
 - `apps/web`: the React app.
 - `packages/core` (`@brim/core`): geometry, ops, intent and slicer. Pure TypeScript, runs in the browser and Node.
 - `packages/printer` (`@brim/printer`): Brim's connection to Bambu printers. It runs [bambu-printer-mcp](https://github.com/DMontgomery40/bambu-printer-mcp) as a child process and calls its tools: discover, slice, print, progress, filaments, pause, resume, cancel. `api.ts` is the dev server's `/api/printers` (discover, connect, live status). Node only.
-- `packages/store` (`@brim/store`): the server's storage. A SQLite database through [Kysely](https://kysely.dev) on Node's built-in `node:sqlite` holds parts, projects, notes, jobs and profiles; a local bucket holds file bytes and mesh triangles, named by sha256. Both live in `.brim/` at the repo root (`BRIM_DATA` overrides; delete it to start over). `api.ts` is the dev server's `/api/state`, `/api/blobs` and `/api/files`. On the first visit the web app imports what this browser had in localStorage. Node only.
+- `packages/store` (`@brim/store`): the server's storage. A SQLite database through [Kysely](https://kysely.dev) on Node's built-in `node:sqlite` holds parts, projects, notes, jobs and profiles; a local bucket holds file bytes and mesh triangles, named by sha256. Both live in `.brim/` at the repo root (`BRIM_DATA` overrides; delete it to start over). `api.ts` is the dev server's `/api/state`, `/api/blobs` and `/api/files`. Node only.
 - `apps/simulator` (`@brim/simulator`): a simulated Bambu printer, for developing without hardware (see below).
 
-The domain vocabulary is in [docs/domain.md](docs/domain.md). Run the commands below from the repo root.
+Brim's areas (Projects, Library, Design, Jobs, Printers, Inventory), what each has built and planned, and the vocabulary are in [docs/domain.md](docs/domain.md). Run the commands below from the repo root.
 
 Built with React, TypeScript, Vite, Three.js, and Elanor UI components. Model generation and slicing run locally in the browser.
 
