@@ -1,4 +1,4 @@
-import {useEffect, useRef} from 'react';
+import {useEffect, useMemo, useRef} from 'react';
 import {Kadmos, type KadmosViewer as Handle} from 'kadmos';
 import {toStl} from '@brim/core/model.ts';
 import {tokenColor} from '../lib/color.ts';
@@ -15,27 +15,29 @@ export function KadmosViewer({
 }) {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Handle>(null);
-  const dark = theme.endsWith('dark');
+  const mode = theme.endsWith('dark') ? 'dark' : 'light';
+  // Each tokenColor call draws to a canvas, so resolve the accent once per theme.
+  const accent = useMemo(() => tokenColor('--semantic-color-background-fill-primary', '#3a6ea5'), [theme]);
 
   useEffect(() => {
-    viewer.current = Kadmos.mount(host.current!, {theme: dark ? 'dark' : 'light'});
+    viewer.current = Kadmos.mount(host.current!, {theme: mode});
     return () => viewer.current?.destroy();
   }, []);
 
   // Kadmos only parses hex, and uses the accent inside the 3D scene too, so resolve the tokens here.
   useEffect(() => {
-    viewer.current?.setTheme(dark ? 'dark' : 'light');
-    viewer.current?.setAccent(tokenColor('--semantic-color-background-fill-primary', '#3a6ea5'));
-  }, [theme]);
+    viewer.current?.setTheme(mode);
+    viewer.current?.setAccent(accent);
+  }, [mode, accent]);
 
   const plate = bed.join('x');
   // shortcut: Kadmos' setAccent skips the model, so a theme change reloads it (resetting camera/tools); drop `theme` here if Kadmos learns to recolour in place.
   useEffect(() => {
     const url = URL.createObjectURL(new Blob([toStl(positions)]));
-    const color = tokenColor('--semantic-color-background-fill-primary', '#3a6ea5');
-    viewer.current?.load(url, {plate, color}).catch(() => {}); // errors are shown in the viewer
+    // Kadmos renders the error in place; log it so failures stay diagnosable.
+    viewer.current?.load(url, {plate, color: accent}).catch((error) => console.error('Kadmos load failed', error));
     return () => URL.revokeObjectURL(url);
-  }, [positions, plate, theme]);
+  }, [positions, plate, accent]);
 
   return <div ref={host} className="viewer" />;
 }

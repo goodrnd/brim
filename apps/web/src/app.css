@@ -88,6 +88,14 @@ html[data-color-scheme='dark'] .brand-mark {
   cursor: grab;
 }
 
+/* Must keep a real size: SimpleViewer skips snapshots while its host has no width. */
+.snapshot-source {
+  position: fixed;
+  inset-inline-start: -10000px;
+  inline-size: 640px;
+  pointer-events: none;
+}
+
 /* Kadmos chrome on our tokens; the attribute outranks Kadmos' own light/dark selectors. */
 .viewer > .kadmos-inline[data-kadmos-theme] {
   --kadmos-bg: var(--semantic-color-background-canvas);

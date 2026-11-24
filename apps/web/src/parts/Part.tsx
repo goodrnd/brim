@@ -90,6 +90,10 @@ export function PartPage(props: {
     [shown, current, positions],
   );
   const printer = printers[settings.printer];
+  // Inputs the overview's thumbnail was last taken for; the snapshot viewer only mounts while they differ.
+  const snapFor = [positions, theme, printer.bed[0], printer.bed[1]];
+  const [snapped, setSnapped] = useState<Array<unknown>>();
+  const needsSnap = !snapped || snapFor.some((v, i) => v !== snapped[i]);
   const setSection = (s: string) => go(`part/${part.id}/${s}`);
   const setHistory = (f: (h: Array<Entry>) => Array<Entry>) => setPart((p) => ({...p, history: f(p.history)}), true);
 
@@ -212,6 +216,20 @@ export function PartPage(props: {
       <Grid.Root>
         <Grid.Item span={{base: 'full', medium: 7}}>
           <KadmosViewer positions={positions} bed={printer.bed} theme={theme} />
+          {/* Kadmos can't snapshot, so a short-lived off-screen SimpleViewer keeps Library thumbnails in sync. */}
+          {needsSnap && (
+            <div className="snapshot-source" aria-hidden>
+              <SimpleViewer
+                positions={positions}
+                bed={[printer.bed[0], printer.bed[1]]}
+                theme={theme}
+                onSnapshot={(thumb) => {
+                  setPart((p) => ({...p, thumb}));
+                  setSnapped(snapFor);
+                }}
+              />
+            </div>
+          )}
         </Grid.Item>
         <Grid.Item span={{base: 'full', medium: 5}}>
           <Stack gap="large" align="stretch">
