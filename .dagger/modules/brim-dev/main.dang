@@ -46,11 +46,15 @@ type BrimDev {
   }
 
   """
-  Discover and connect the simulated X2D through the web server (npm run test:e2e).
-  The container gives the test its own Bambu ports and a private LAN address.
+  The end-to-end tests (npm run test:e2e): storage through the web app in Chromium, and discovering and
+  connecting the simulated X2D. The container gives the printer test its own Bambu ports and a private LAN address.
   """
   pub endToEnd: Void @check {
-    runtime.withExec(["npm", "run", "test:e2e"]).sync
+    runtime
+      .withMountedCache("/root/.cache/ms-playwright", cacheVolume("brim-playwright"))
+      .withExec(["npx", "playwright", "install", "--with-deps", "chromium-headless-shell"])
+      .withExec(["npm", "run", "test:e2e"])
+      .sync
     null
   }
 
