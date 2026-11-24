@@ -16,36 +16,47 @@ export interface StoredFile {
 const kb = (n: number) => (n < 1024 * 1024 ? `${Math.ceil(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 const isMesh = (name: string) => meshFormats.split(',').some((ext) => name.toLowerCase().endsWith(ext));
 
+/** Fetches from the Files API; a failed response throws `what` with the server's reason. */
+async function api(what: string, path: string, init?: RequestInit) {
+  const r = await fetch(`/api/files${path}`, init);
+  // A static host answers with a page, not the API.
+  if (!r.ok && !r.headers.get('content-type')?.startsWith('application/json')) {
+    throw new Error('Files need the Brim server.');
+  }
+  if (!r.ok) {
+    throw new Error(`${what}: ${(await r.json()).error}`);
+  }
+  return r;
+}
+const report = (error_: Error) => alert(error_.message);
+
 /** The Library's Files tab. Needs the dev server; without it, says so. */
 export function Files({onMakePart}: {onMakePart: (f: File) => void}) {
   const [files, setFiles] = useState<Array<StoredFile>>();
   const [error, setError] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const load = () =>
-    fetch('/api/files')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Files need the Brim server.'))))
+    api('Could not list files', '')
+      .then((r) => r.json())
       .then(setFiles, (error_: Error) => setError(error_.message));
   useEffect(() => void load(), []);
 
   const upload = async (f: File) => {
-    const r = await fetch(`/api/files?name=${encodeURIComponent(f.name)}`, {
+    await api(`Could not upload ${f.name}`, `?name=${encodeURIComponent(f.name)}`, {
       method: 'POST',
       headers: {'content-type': f.type || 'application/octet-stream'},
       body: f,
     });
-    if (!r.ok) {
-      return alert(`Could not upload ${f.name}: ${(await r.json()).error}`);
-    }
     await load();
   };
   const remove = async (f: StoredFile) => {
     if (confirm(`Delete “${f.name}”? This cannot be undone.`)) {
-      await fetch(`/api/files/${f.id}`, {method: 'DELETE'});
+      await api(`Could not delete ${f.name}`, `/${f.id}`, {method: 'DELETE'});
       await load();
     }
   };
   const makePart = async (f: StoredFile) => {
-    const r = await fetch(`/api/files/${f.id}`);
+    const r = await api(`Could not open ${f.name}`, `/${f.id}`);
     onMakePart(new File([await r.blob()], f.name));
   };
 
@@ -64,7 +75,7 @@ export function Files({onMakePart}: {onMakePart: (f: File) => void}) {
             const f = e.target.files?.[0];
             e.target.value = '';
             if (f) {
-              void upload(f);
+              void upload(f).catch(report);
             }
           }}
         />
@@ -90,12 +101,12 @@ export function Files({onMakePart}: {onMakePart: (f: File) => void}) {
                     hierarchy="secondary"
                     density="compact"
                     iconStart={<ViewInArIcon />}
-                    onClick={() => void makePart(f)}
+                    onClick={() => void makePart(f).catch(report)}
                   >
                     Make part
                   </Button>
                 )}
-                <IconButton aria-label={`Delete ${f.name}`} onClick={() => void remove(f)}>
+                <IconButton aria-label={`Delete ${f.name}`} onClick={() => void remove(f).catch(report)}>
                   <DeleteIcon />
                 </IconButton>
               </Stack>

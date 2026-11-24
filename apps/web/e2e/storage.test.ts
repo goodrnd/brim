@@ -168,3 +168,26 @@ void test('browser storage from before the server is imported once', async (t) =
   await page.getByRole('link', {name: 'Old project'}).waitFor();
   assert.equal(await page.getByRole('link', {name: 'Other browser'}).count(), 0);
 });
+
+void test('a save a closing page could not send is sent on the next visit', async (t) => {
+  const {url, page} = await start(t);
+  await page.goto(url);
+  await signIn(page);
+  // What `save` leaves behind when the body is too big for a keepalive request.
+  await page.evaluate(() =>
+    localStorage.setItem('brim-unsent-projects', JSON.stringify([{id: 'late', name: 'Late save', edited: 1}])),
+  );
+  await page.goto(`${url}#/library/projects`);
+  await page.reload();
+  await page.getByRole('link', {name: 'Late save'}).waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem('brim-unsent-projects')), null);
+});
+
+void test('a storage error at start is shown, not papered over with browser storage', async (t) => {
+  const {url, page} = await start(t);
+  await page.route('**/api/state', (r) =>
+    r.fulfill({status: 500, contentType: 'application/json', body: '{"error":"disk full"}'}),
+  );
+  await page.goto(url);
+  await page.getByRole('alert').filter({hasText: 'disk full'}).waitFor();
+});

@@ -97,13 +97,21 @@ const partsFromServer = (parts: Array<StoredPart>): Promise<Array<Part>> =>
  * Loads the server's state, first bringing over this browser's localStorage if the server has none yet.
  * Undefined when there is no server.
  */
-export async function loadState(storage: Pick<Storage, 'getItem'>): Promise<ServerState | undefined> {
+export async function loadState(storage: Pick<Storage, 'getItem' | 'removeItem'>): Promise<ServerState | undefined> {
   type Stored = Omit<ServerState, 'parts'> & {parts: Array<StoredPart>};
-  const get = () => fetch('/api/state').then((r) => (r.ok ? (r.json() as Promise<Stored>) : undefined));
-  let state = await get().catch(() => undefined);
-  if (!state) {
+  const first = await fetch('/api/state').catch(() => undefined);
+  // No server: nothing answered, or a static host answered with a page. Any other failure is an error.
+  if (!first?.headers.get('content-type')?.startsWith('application/json')) {
     return undefined;
   }
+  const read = async (r: Response) => {
+    if (!r.ok) {
+      throw new Error(`Could not load storage: ${r.status} ${await r.text()}`);
+    }
+    return (await r.json()) as Stored;
+  };
+  let state = await read(first);
+  let changed = false;
   if (!state.imported) {
     const local = Object.fromEntries(
       Object.entries(keys).map(([c, key]) => {
@@ -122,22 +130,56 @@ export async function loadState(storage: Pick<Storage, 'getItem'>): Promise<Serv
     if (!r.ok) {
       throw new Error(`Could not import browser storage: ${await r.text()}`);
     }
-    state = (await get())!;
+    changed = true;
+  }
+  // Saves a closing page could not send (see `save`).
+  for (const collection of Object.keys(keys) as Array<Collection>) {
+    const body = storage.getItem(unsent(collection));
+    if (body !== null) {
+      await put(collection, body, false);
+      storage.removeItem(unsent(collection));
+      changed = true;
+    }
+  }
+  if (changed) {
+    state = await read(await fetch('/api/state'));
   }
   return {...state, parts: await partsFromServer(state.parts)};
 }
 
-/** Replaces one collection on the server. */
-export async function save(collection: Collection, value: unknown) {
-  const body = JSON.stringify(collection === 'parts' ? await partsToServer(value as Array<Part>) : value);
+const unsent = (collection: Collection) => `brim-unsent-${collection}`;
+
+async function put(collection: Collection, body: string, keepalive: boolean) {
   const r = await fetch(`/api/state/${collection}`, {
     method: 'PUT',
     headers: {'content-type': 'application/json'},
     body,
-    // A save on page close survives only as keepalive, which browsers cap at 64 KB.
-    keepalive: body.length < 60_000,
+    keepalive,
   });
   if (!r.ok) {
-    throw new Error(`${r.status} ${await r.text()}`);
+    throw new Error(`Could not save ${collection}: ${r.status} ${await r.text()}`);
   }
+}
+
+let closingBytes = 0; // keepalive bodies in flight
+
+/**
+ * Replaces one collection on the server. `closing` is a save from a page that is going away: only a keepalive
+ * request outlives the page, and browsers cap those at 64 KB in total, so a larger one waits in localStorage
+ * for `loadState` on the next visit.
+ * shortcut: a mesh imported in the moment before closing is lost with that save, its upload cannot outlive the page.
+ */
+export async function save(collection: Collection, value: unknown, closing = false) {
+  const body = JSON.stringify(collection === 'parts' ? await partsToServer(value as Array<Part>) : value);
+  if (!closing) {
+    await put(collection, body, false);
+    // A page restored from the back/forward cache may have parked an older save.
+    return localStorage.removeItem(unsent(collection));
+  }
+  const size = new Blob([body]).size;
+  if (closingBytes + size > 60_000) {
+    return localStorage.setItem(unsent(collection), body);
+  }
+  closingBytes += size;
+  await put(collection, body, true).finally(() => (closingBytes -= size));
 }
