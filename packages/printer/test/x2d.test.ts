@@ -6,7 +6,8 @@ import test from 'node:test';
 import {defaults, mcpEnv, start} from '@brim/simulator/server.ts';
 import {connect, type Progress} from '../src/bambu.ts';
 
-const studio = '/Applications/BambuStudio.app/Contents/MacOS/BambuStudio';
+// The Dagger `sim` check sets BAMBU_STUDIO_PATH to its Linux Bambu Studio.
+const studio = process.env.BAMBU_STUDIO_PATH || '/Applications/BambuStudio.app/Contents/MacOS/BambuStudio';
 
 const v = (x: number, y: number, z: number) => [x * 20, y * 20, z * 20].join(' ');
 /** A 20 mm cube as ASCII STL. */
@@ -74,14 +75,15 @@ const until = async (read: () => Promise<Progress>, ok: (p: Progress) => boolean
 // The X2D prints through Bambu's closed networking plug-in; the simulator's stand-in helper takes its place.
 void test(
   'slice an STL and print it on a simulated X2D through bambu-printer-mcp',
-  {skip: !existsSync(studio) && 'needs Bambu Studio'},
+  // A set BAMBU_STUDIO_PATH must exist, so the Dagger check cannot pass by skipping.
+  {skip: !process.env.BAMBU_STUDIO_PATH && !existsSync(studio) && 'needs Bambu Studio'},
   async (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'brim-x2d-'));
     // The MCP always uses the printer's real ports, so this needs them free (stop `npm run simulator` first).
     const sim = await start({...defaults, dir, jobSeconds: 4, ssdp: false});
     t.after(() => sim.stop());
     // The MCP asks a person only for physical checks (after a cleared error, say); none come up here.
-    const printer = await connect(mcpEnv(sim.config), async () => false);
+    const printer = await connect({...mcpEnv(sim.config), BAMBU_STUDIO_PATH: studio}, async () => false);
     t.after(() => printer.close());
 
     const idle = await printer.progress();

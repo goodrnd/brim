@@ -171,6 +171,13 @@ export function mcpEnv(config: Config) {
     BAMBU_TOKEN: config.token,
     BAMBU_MODEL: config.model,
     BAMBU_NATIVE_HELPER: fileURLToPath(new URL('../bin/native-helper', import.meta.url)),
+    // On Linux the MCP requires the plug-in and certificates to exist before it runs the helper; these are empty stand-ins.
+    // Elsewhere it keeps finding the installed Bambu Studio's own plug-in.
+    ...(process.platform === 'linux' && {
+      BAMBU_NATIVE_PLUGIN: fileURLToPath(new URL('../bin/plugin/libbambu_networking.so', import.meta.url)),
+      BAMBU_NATIVE_CERT_DIR: fileURLToPath(new URL('../bin/plugin', import.meta.url)),
+      BAMBU_NATIVE_ALLOW_UNPINNED_PLUGIN: '1',
+    }),
     BAMBU_SIM_DIR: config.dir,
     BAMBU_SIM_MQTT_PORT: String(config.ports.mqtt),
   };
