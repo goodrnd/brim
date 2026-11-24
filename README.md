@@ -84,6 +84,8 @@ The simulator also announces itself on the LAN the way a real printer does (SSDP
 
 `npm run test:sim` slices a cube with Bambu Studio and prints it on the simulated X2D through bambu-printer-mcp. It needs Bambu Studio and the ports above free, so stop `npm run simulator` first; `npm test` leaves it out.
 
+`dagger check` runs all of it in containers with every dependency: lint, format, `npm test`, the build, `test:e2e` with Chromium, and `test:sim` (the `sim` check) with Bambu Studio's Linux CLI on linux/amd64, emulated on Apple silicon. `dagger check sim` runs one.
+
 ## Prototype limits
 
 Without an LLM key, descriptions are interpreted by a rule-based parser. Supported shapes and edits are limited; imported meshes support scale, stretch, flip, and rotation edits.
