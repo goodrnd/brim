@@ -119,26 +119,6 @@ void test('state: collections round-trip in order, mesh entries by hash, bad inp
   assert.equal((await fetch(`${base}/blobs/${'0'.repeat(64)}`)).status, 404);
 });
 
-void test('state: browser storage is imported once', async (t) => {
-  const {base} = await serve(t);
-  const post = (body: unknown) =>
-    fetch(`${base}/state/import`, {
-      method: 'POST',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify(body),
-    }).then((r) => r.json());
-  assert.equal((await (await fetch(`${base}/state`)).json()).imported, false);
-  // One bad collection imports nothing, so the next try starts clean.
-  assert.ok((await post({projects: [{id: 'x', name: 'Half', edited: 1}], notes: 'broken'})).error);
-  const before = await (await fetch(`${base}/state`)).json();
-  assert.deepEqual([before.projects, before.imported], [[], false]);
-  assert.deepEqual(await post({projects: [{id: 'a', name: 'Desk', edited: 1}], notes: null}), {imported: true});
-  assert.deepEqual(await post({projects: [{id: 'b', name: 'Other', edited: 1}]}), {imported: false});
-  const state = await (await fetch(`${base}/state`)).json();
-  assert.equal(state.imported, true);
-  assert.deepEqual(state.projects, [{id: 'a', name: 'Desk', edited: 1}]);
-});
-
 void test('bucket: rejects uploads over the cap and leaves no temp file', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'brim-bucket-'));
   t.after(() => rm(dir, {recursive: true}));

@@ -17,7 +17,6 @@ export interface ServerState {
   printers?: Record<string, Printer>;
   materials?: Record<string, Material>;
   slice?: SliceSettings;
-  imported: boolean;
 }
 
 const keys = {
@@ -93,15 +92,13 @@ const partsFromServer = (parts: Array<StoredPart>): Promise<Array<Part>> =>
     })),
   );
 
-/**
- * Loads the server's state, first bringing over this browser's localStorage if the server has none yet.
- * Undefined when there is no server.
- */
+/** Loads the server's state. Undefined when there is no server (a static build). */
 export async function loadState(storage: Pick<Storage, 'getItem' | 'removeItem'>): Promise<ServerState | undefined> {
   type Stored = Omit<ServerState, 'parts'> & {parts: Array<StoredPart>};
-  const first = await fetch('/api/state').catch(() => undefined);
-  // No server: nothing answered, or a static host answered with a page. Any other failure is an error.
-  if (!first?.headers.get('content-type')?.startsWith('application/json')) {
+  const first = await fetch('/api/state');
+  // A static host has no such route, or answers every path with the app's page.
+  const json = first.headers.get('content-type')?.startsWith('application/json');
+  if (!json && (first.status === 404 || first.ok)) {
     return undefined;
   }
   const read = async (r: Response) => {
@@ -112,26 +109,6 @@ export async function loadState(storage: Pick<Storage, 'getItem' | 'removeItem'>
   };
   let state = await read(first);
   let changed = false;
-  if (!state.imported) {
-    const local = Object.fromEntries(
-      Object.entries(keys).map(([c, key]) => {
-        try {
-          return [c, JSON.parse(storage.getItem(key) ?? 'null')];
-        } catch {
-          return [c, null];
-        }
-      }),
-    );
-    const r = await fetch('/api/state/import', {
-      method: 'POST',
-      headers: {'content-type': 'application/json'},
-      body: JSON.stringify(local),
-    });
-    if (!r.ok) {
-      throw new Error(`Could not import browser storage: ${await r.text()}`);
-    }
-    changed = true;
-  }
   // Saves a closing page could not send (see `save`).
   for (const collection of Object.keys(keys) as Array<Collection>) {
     const body = storage.getItem(unsent(collection));
@@ -157,7 +134,7 @@ async function put(collection: Collection, body: string, keepalive: boolean) {
     keepalive,
   });
   if (!r.ok) {
-    throw new Error(`Could not save ${collection}: ${r.status} ${await r.text()}`);
+    throw Object.assign(new Error(`Could not save ${collection}: ${r.status} ${await r.text()}`), {status: r.status});
   }
 }
 

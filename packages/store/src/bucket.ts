@@ -54,7 +54,12 @@ export function bucket(dir: string) {
     async has(sha256: string) {
       return stat(path(sha256)).then(
         () => true,
-        () => false,
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') {
+            return false;
+          }
+          throw error;
+        },
       );
     },
     read: (sha256: string) => createReadStream(path(sha256)),

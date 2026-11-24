@@ -19,12 +19,13 @@ const isMesh = (name: string) => meshFormats.split(',').some((ext) => name.toLow
 /** Fetches from the Files API; a failed response throws `what` with the server's reason. */
 async function api(what: string, path: string, init?: RequestInit) {
   const r = await fetch(`/api/files${path}`, init);
-  // A static host answers with a page, not the API.
-  if (!r.ok && !r.headers.get('content-type')?.startsWith('application/json')) {
+  const type = r.headers.get('content-type') ?? '';
+  // A static host answers with a page (404, or 200 with an SPA fallback), not the API.
+  if (type.startsWith('text/html') && (r.ok || r.status === 404)) {
     throw new Error('Files need the Brim server.');
   }
   if (!r.ok) {
-    throw new Error(`${what}: ${(await r.json()).error}`);
+    throw new Error(`${what}: ${type.startsWith('application/json') ? (await r.json()).error : r.status}`);
   }
   return r;
 }

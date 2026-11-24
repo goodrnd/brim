@@ -1,6 +1,6 @@
 /**
  * Storage end to end: the real dev server with its SQLite db and file bucket in a temp dir, driven by Chromium.
- * Checks what a person sees survive a reload, including imported meshes, and that browser storage is brought over once.
+ * Checks what a person sees survive a reload, including imported meshes.
  * Needs Playwright's Chromium (`npx playwright install chromium`).
  */
 import assert from 'node:assert/strict';
@@ -144,31 +144,6 @@ void test('a file becomes a part with "Make part"', async (t) => {
   await page.getByRole('link', {name: 'hook.stl'}).waitFor();
 });
 
-void test('browser storage from before the server is imported once', async (t) => {
-  const {url, page} = await start(t);
-  // Seed localStorage the way the old app left it, before the first visit to a server.
-  await page.route(url, (r) => r.fulfill({body: '<html></html>', contentType: 'text/html'}));
-  await page.goto(url);
-  await page.evaluate(() => {
-    localStorage.setItem('brim-projects', JSON.stringify([{id: 'old', name: 'Old project', edited: 1}]));
-    localStorage.setItem('brim-session', 'true');
-  });
-  await page.unroute(url);
-
-  // Only the hash changes, so reload to load the real app.
-  await page.goto(`${url}#/library/projects`);
-  await page.reload();
-  await page.getByRole('link', {name: 'Old project'}).waitFor();
-
-  // A second import (another browser's leftovers) does not overwrite.
-  await page.evaluate(() =>
-    localStorage.setItem('brim-projects', JSON.stringify([{id: 'other', name: 'Other browser', edited: 1}])),
-  );
-  await page.reload();
-  await page.getByRole('link', {name: 'Old project'}).waitFor();
-  assert.equal(await page.getByRole('link', {name: 'Other browser'}).count(), 0);
-});
-
 void test('a save a closing page could not send is sent on the next visit', async (t) => {
   const {url, page} = await start(t);
   await page.goto(url);
@@ -186,7 +161,8 @@ void test('a save a closing page could not send is sent on the next visit', asyn
 void test('a storage error at start is shown, not papered over with browser storage', async (t) => {
   const {url, page} = await start(t);
   await page.route('**/api/state', (r) =>
-    r.fulfill({status: 500, contentType: 'application/json', body: '{"error":"disk full"}'}),
+    // A proxy or middleware error page, not the API's JSON: still an error, not "no server".
+    r.fulfill({status: 500, contentType: 'text/html', body: '<h1>disk full</h1>'}),
   );
   await page.goto(url);
   await page.getByRole('alert').filter({hasText: 'disk full'}).waitFor();

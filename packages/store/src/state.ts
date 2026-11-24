@@ -32,7 +32,7 @@ function isRows(value: Json | undefined): value is Array<Row> {
   return Array.isArray(value) && value.every((r) => r !== null && typeof r === 'object' && !Array.isArray(r));
 }
 
-/** Everything the web app loads at start. `imported` says whether browser storage was already brought over. */
+/** Everything the web app loads at start. */
 export async function readState(db: Db) {
   const [parts, entries, projects, notes, uses, jobs, profiles, settings] = await Promise.all([
     db.selectFrom('parts').selectAll().orderBy(byRowid).execute(),
@@ -64,7 +64,6 @@ export async function readState(db: Db) {
     printers: profiles.some((p) => p.kind === 'printer') ? profilesOf('printer') : undefined,
     materials: profiles.some((p) => p.kind === 'material') ? profilesOf('material') : undefined,
     slice: ((v) => v && JSON.parse(v))(setting('slice')),
-    imported: setting('imported') !== undefined,
   };
 }
 
@@ -130,25 +129,3 @@ async function write(trx: Transaction<Database>, name: Collection, value: Json) 
     await trx.insertInto(name).values(pick<never>(row, columns[name])).execute();
   }
 }
-
-/**
- * Brings over the browser's localStorage once; later calls do nothing, so a second tab cannot overwrite.
- * All or nothing: one bad collection leaves the database as it was, still waiting for an import.
- */
-export const importOnce = (db: Db, state: Partial<Record<Collection, Json>>) =>
-  db.transaction().execute(async (trx) => {
-    const done = await trx.selectFrom('settings').select('key').where('key', '=', 'imported').executeTakeFirst();
-    if (done) {
-      return false;
-    }
-    for (const name of collections) {
-      if (state[name] != null) {
-        await write(trx, name, state[name]);
-      }
-    }
-    await trx
-      .insertInto('settings')
-      .values({key: 'imported', value: JSON.stringify(Date.now())})
-      .execute();
-    return true;
-  });

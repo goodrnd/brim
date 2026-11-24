@@ -13,7 +13,10 @@ const pending = new Map<string, Promise<void>>(); // one save in flight per key,
 const latest = new Map<string, unknown>();
 const failed = new Set<string>();
 
-/** Saves `value` after the save before it, and retries a failed save while the value is still the newest. */
+/**
+ * Saves `value` after the save before it, and retries a failed save while the value is still the newest.
+ * A 4xx is not retried: sending the same value again would be refused again.
+ */
 function queue(key: string, collection: Collection, value: unknown) {
   latest.set(key, value);
   const run = (pending.get(key) ?? Promise.resolve()).then(() => save(collection, value));
@@ -21,14 +24,20 @@ function queue(key: string, collection: Collection, value: unknown) {
     key,
     run.then(
       () => void failed.delete(key),
-      (error: Error) => {
+      (error: Error & {status?: number}) => {
         // oxlint-disable-next-line no-console
         console.warn(`Could not save ${key}`, error);
         const first = !failed.size;
         failed.add(key);
-        setTimeout(() => latest.get(key) === value && queue(key, collection, value), 5000);
+        const permanent = error.status !== undefined && error.status < 500;
+        if (!permanent) {
+          setTimeout(() => latest.get(key) === value && queue(key, collection, value), 5000);
+        }
         if (first) {
-          alert(`${error.message}\n\nYour changes are only in this tab until Brim can save them. It keeps trying.`);
+          alert(
+            `${error.message}\n\nYour changes are only in this tab until Brim can save them. ` +
+              (permanent ? 'The next edit tries again.' : 'It keeps trying.'),
+          );
         }
       },
     ),
