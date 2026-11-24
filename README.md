@@ -59,7 +59,7 @@ npm run preview  # Serve the production build locally
 
 ### Checks
 
-Pull requests run [Dagger](https://dagger.io) checks on Dagger Cloud: lint, format, test, end-to-end and build, the npm scripts above in a pinned Node container (`.dagger/modules/brim-dev`). To run them locally you need the Dagger CLI v1.0.0-beta.28 (the version the module is tested with) and a container runtime such as Docker or OrbStack.
+Pull requests run [Dagger](https://dagger.io) checks on Dagger Cloud: lint, format, test, end-to-end, sim and build, the npm scripts above in a pinned Node container (`.dagger/modules/brim-dev`). To run them locally you need the Dagger CLI v1.0.0-beta.28 (the version the module is tested with) and a container runtime such as Docker or OrbStack.
 
 ```sh
 dagger check                            # Run every check Dagger Cloud runs
@@ -76,7 +76,7 @@ dagger lock update                      # Refresh dagger.lock's pinned images (c
 
 The X2D reports two nozzles, one external spool per nozzle, a four-slot AMS 2 Pro with drying, and its cancel state. A job heats up, then runs `PREPARE` → `RUNNING` → `FINISH`, with pause, resume and stop. Jobs take `SIM_JOB_SECONDS` (default 120). It does not run the G-code, simulate AMS loading or errors, or serve the RTSP camera that X1, P2S, H2 and X2D printers use.
 
-bambu-printer-mcp sends X2D prints and controls through Bambu's closed networking plug-in. For the simulator, `BAMBU_NATIVE_HELPER` points it at `apps/simulator/bin/native-helper`, a stand-in that hands the job to the simulator. That tests Brim and the MCP's own checks, not Bambu's transport.
+bambu-printer-mcp sends X2D prints and controls through Bambu's closed networking plug-in. For the simulator, `BAMBU_NATIVE_HELPER` points it at `apps/simulator/bin/native-helper`, a stand-in that hands the job to the simulator. On Linux the MCP also requires Bambu's plug-in and certificates to exist, so it is pointed at the empty files in `apps/simulator/bin/plugin`; they are deliberate stand-ins, not truncated downloads, and a real plug-in does not belong there. That tests Brim and the MCP's own checks, not Bambu's transport.
 
 The simulator also announces itself on the LAN the way a real printer does (SSDP on UDP 2021, from this machine's LAN address; `SIM_SSDP=0` turns that off). So in `npm run dev`, Settings → **Find printers** lists it; connect with access code `12345678` to see its live status and AMS spools. Real Bambu printers show up the same way; their access code is on the printer's screen. Brim keeps the code in the dev server's memory only, so after a restart you connect again. Bambu Studio holds UDP 2021 while it runs, so close it to discover.
 

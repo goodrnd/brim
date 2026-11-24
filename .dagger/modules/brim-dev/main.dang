@@ -16,27 +16,28 @@ type BrimDev {
     # Install from the manifests alone, so a source edit does not rerun npm ci.
     let manifests = ws.directory("/", include: ["package.json", "package-lock.json", "**/package.json"], exclude: ["**/node_modules"])
     let source = ws.directory("/", exclude: [".git", ".dagger", "**/node_modules", "**/dist", "**/.vite", ".env"])
-    self.runtime = container
-      .from("node:25.8.1-bookworm-slim")
-      .withMountedCache("/root/.npm", cacheVolume("brim-npm"))
-      .withWorkdir("/src")
-      .withDirectory("/src", manifests)
-      .withExec(["npm", "ci", "--no-audit", "--no-fund"])
-      .withDirectory("/src", source)
+    let node = "node:25.8.1-bookworm-slim"
+    # Shared by both runtimes; a container's platform is fixed when it is created, so each passes its own base.
+    withWorkspace(base: Container!): Container! {
+      base
+        .withMountedCache("/root/.npm", cacheVolume("brim-npm"))
+        .withWorkdir("/src")
+        .withDirectory("/src", manifests)
+        .withExec(["npm", "ci", "--no-audit", "--no-fund"])
+        .withDirectory("/src", source)
+    }
+    self.runtime = withWorkspace(container.from(node))
     # The AppImage's runtime needs FUSE, so unpack its squashfs, which starts where the ELF runtime's section headers end.
-    let appImage = http("https://github.com/bambulab/BambuStudio/releases/download/v02.09.02.62/BambuStudio_ubu22-v02.09.02.62-20261124164959.AppImage")
-    self.studioRuntime = container(platform: "linux/amd64")
-      .from("node:25.8.1-bookworm-slim")
+    # Pinned to the release asset's published digest, so a re-uploaded asset fails the check instead of running.
+    let appImage = http("https://github.com/bambulab/BambuStudio/releases/download/v02.09.02.62/BambuStudio_ubu22-v02.09.02.62-20261124164959.AppImage", checksum: "sha256:1324e55aaac9805dc0b48667e3da9f789a149dcadd04ef8cef23fe9455838fe7")
+    # Unpacked before npm ci, so a dependency change does not unpack it again.
+    self.studioRuntime = withWorkspace(container(platform: "linux/amd64")
+      .from(node)
       .withExec(["sh", "-c", "apt-get update && apt-get install -y --no-install-recommends squashfs-tools libgtk-3-0 libwebkit2gtk-4.1-0 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libgl1 libegl1 libglu1-mesa && rm -rf /var/lib/apt/lists/*"])
       .withFile("/tmp/studio.AppImage", appImage)
       .withExec(["sh", "-c", "unsquashfs -q -o $(node -e 'const b=require(\"fs\").readFileSync(\"/tmp/studio.AppImage\");console.log(Number(b.readBigUInt64LE(40))+b.readUInt16LE(58)*b.readUInt16LE(60))') -d /opt/bambu-studio /tmp/studio.AppImage && rm /tmp/studio.AppImage"])
       # AppRun sets the library path; the MCP finds the profiles beside it.
-      .withEnvVariable("BAMBU_STUDIO_PATH", "/opt/bambu-studio/AppRun")
-      .withMountedCache("/root/.npm", cacheVolume("brim-npm"))
-      .withWorkdir("/src")
-      .withDirectory("/src", manifests)
-      .withExec(["npm", "ci", "--no-audit", "--no-fund"])
-      .withDirectory("/src", source)
+      .withEnvVariable("BAMBU_STUDIO_PATH", "/opt/bambu-studio/AppRun"))
     self
   }
 
@@ -81,7 +82,11 @@ type BrimDev {
   Slice a cube with Bambu Studio and print it on the simulated X2D through bambu-printer-mcp (npm run test:sim).
   """
   pub sim: Void @check {
-    studioRuntime.withExec(["npm", "run", "test:sim"]).sync
+    # test:sim's command with a 10 min budget: a cold Bambu Studio under qemu can outlast its 120 s, which would fail as a bare timeout.
+    studioRuntime
+      .withWorkdir("/src/packages/printer")
+      .withExec(["node", "--test", "--test-timeout=600000", "test/x2d.test.ts"])
+      .sync
     null
   }
 
