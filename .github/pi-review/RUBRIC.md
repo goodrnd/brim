@@ -49,7 +49,7 @@ Flag issues that:
 
 ## Review priorities
 
-1. Surface critical non-blocking human callouts (migrations, dependency churn, auth/permissions, compatibility, destructive operations) at the end.
+1. Surface critical non-blocking human callouts (migrations, dependency churn, auth/permissions, compatibility, destructive operations) in the "Needs a human look" section.
 2. Prefer simple, direct solutions over wrappers or abstractions without clear value.
 3. Treat back pressure handling as critical to system stability.
 4. Apply system-level thinking; flag changes that increase operational risk or on-call wakeups.
@@ -67,31 +67,27 @@ When reviewing added or modified error handling, default to fail-fast behavior.
 6. If a catch exists only to satisfy lint/style without real handling, treat it as a bug.
 7. When uncertain, prefer crashing fast over silent degradation.
 
-## Required human callouts (non-blocking, at the very end)
+## Required human callouts (non-blocking)
 
-After findings/verdict, you MUST append this final section:
+Under the heading `### Needs a human look`, list the callouts that apply to the reviewed change, using these labels exactly:
 
-## Human Reviewer Callouts (Non-Blocking)
-
-Include only applicable callouts (no yes/no lines):
-
-- **This change adds a database migration:** <files/details>
-- **This change introduces a new dependency:** <package(s)/details>
-- **This change changes a dependency (or the lockfile):** <files/package(s)/details>
-- **This change modifies auth/permission behavior:** <what changed and where>
-- **This change introduces backwards-incompatible public schema/API/contract changes:** <what changed and where>
-- **This change includes irreversible or destructive operations:** <operation and scope>
-- **This change adds or removes feature flags:** <feature flags changed> (call out re-use of dormant feature flags!)
-- **This change changes configuration defaults:** <config var changed>
+- **Database migration:** <files/details>
+- **New dependency:** <package(s)/details>
+- **Dependency change:** <files/package(s)/details> (includes lockfile-only changes)
+- **Auth/permissions:** <what changed and where>
+- **Breaking change:** <backwards-incompatible public schema/API/contract change and where>
+- **Destructive operation:** <irreversible operation and scope>
+- **Feature flag:** <flags added or removed> (call out re-use of dormant feature flags!)
+- **Config default:** <config var changed>
 
 Rules for this section:
 
 1. These are informational callouts for the human reviewer, not fix items.
 2. Do not include them in Findings unless there is an independent defect.
 3. These callouts alone must not change the verdict.
-4. Only include callouts that apply to the reviewed change.
-5. Keep each emitted callout bold exactly as written.
-6. If none apply, write "- (none)".
+4. Only include callouts that apply to the reviewed change (no yes/no lines).
+5. One line per callout: what changed and why a human should look, in plain words.
+6. If none apply, leave out the whole section, heading included.
 
 ## Priority levels
 
@@ -104,45 +100,47 @@ Tag each finding with a priority level in the title:
 
 ## Output format
 
-Provide your findings in a clear, structured format:
-
-1. List each finding with its priority tag, file location, and explanation.
+1. Number the findings F1, F2, ... in priority order (highest first). Use the same number in the table and in the detail block so people can refer to "F3".
 2. Findings must reference locations that overlap with the actual diff — don't flag pre-existing code.
 3. Keep line references as short as possible (avoid ranges over 5-10 lines; pick the most suitable subrange).
 4. Provide an overall verdict: "correct" (no blocking issues) or "needs attention" (has blocking issues).
 5. Ignore trivial style issues unless they obscure meaning or violate documented standards.
 6. Do not generate a full PR fix — only flag issues and optionally provide short suggestion blocks.
-7. End with the required "Human Reviewer Callouts (Non-Blocking)" section and all applicable bold callouts (no yes/no).
 
 ### Comment layout
 
-Your output is posted verbatim as a GitHub PR comment, so write GitHub-flavored Markdown in exactly this shape:
+Your output is posted verbatim as a GitHub PR comment. Most readers only read the part above the detail blocks, so that part must give the whole picture on its own. Write GitHub-flavored Markdown in exactly this shape:
 
 ```markdown
-**Verdict:** ✅ correct | ⚠️ needs attention: <one-sentence summary>
+**Verdict:** ✅ correct | ⚠️ needs attention
 
-| Priority | Finding | Location |
-| --- | --- | --- |
-| P1 | <short title> | `path/to/file.ts:42` |
+**What this PR does:** <1-2 plain sentences>
+
+**Overall:** <2-3 sentences: how solid the change is, where the risk sits, what the author should do next>
+
+### Needs a human look
+
+- **New dependency:** ...
+
+### Findings
+
+| #   | Priority | What goes wrong                                        | Location             |
+| --- | -------- | ------------------------------------------------------ | -------------------- |
+| F1  | P1       | <one sentence: the consequence for a user or operator> | `path/to/file.ts:42` |
 
 <details>
-<summary><b>[P1] Short title</b>: <code>path/to/file.ts:42</code></summary>
+<summary><b>F1 [P1] Short title</b>: <code>path/to/file.ts:42</code></summary>
 
 <explanation paragraph, optional suggestion block>
-
-</details>
-
-<details>
-<summary>Human Reviewer Callouts (Non-Blocking)</summary>
-
-- **This change ...:** ...
 
 </details>
 ```
 
 - Use one verdict on the verdict line: `✅ correct` or `⚠️ needs attention`, never both.
+- "What this PR does" and "Overall" are for someone who has not read the diff: plain words, no file paths, no finding numbers needed to follow them.
+- The "What goes wrong" cell states the consequence and when it happens (e.g. "Clearing a size field keeps the old value, so the part is built with a size the UI no longer shows"), not the name of the code involved.
 - One `<details>` block per finding, in the same order as the table. Keep a blank line after `<summary>` and before `</details>` so the Markdown inside renders.
-- Leave out the table when there are no findings, and say the code looks good on the verdict line.
+- Leave out the "Findings" section when there are no findings, and say the code looks good in "Overall".
 - No preamble or closing remarks outside this layout.
 
-Output all findings the author would fix if they knew about them. If there are no qualifying findings, explicitly state the code looks good. Don't stop at the first finding - list every qualifying issue. Then append the required non-blocking callouts section.
+Output all findings the author would fix if they knew about them. Don't stop at the first finding - list every qualifying issue.
