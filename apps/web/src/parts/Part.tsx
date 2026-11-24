@@ -35,7 +35,8 @@ import {ProjectPicker} from '../projects/Projects.tsx';
 import {go} from '../lib/route.ts';
 import {download} from '../lib/download.ts';
 import {RenameButton} from '../ui/controls.tsx';
-import {Viewer} from './Viewer.tsx';
+import {SimpleViewer} from './SimpleViewer.tsx';
+import {KadmosViewer} from './KadmosViewer.tsx';
 
 const tweaks = [
   'make it taller',
@@ -89,6 +90,10 @@ export function PartPage(props: {
     [shown, current, positions],
   );
   const printer = printers[settings.printer];
+  // Inputs the overview's thumbnail was last taken for; the snapshot viewer only mounts while they differ.
+  const snapFor = [positions, theme, printer.bed[0], printer.bed[1]];
+  const [snapped, setSnapped] = useState<Array<unknown>>();
+  const needsSnap = !snapped || snapFor.some((v, i) => v !== snapped[i]);
   const setSection = (s: string) => go(`part/${part.id}/${s}`);
   const setHistory = (f: (h: Array<Entry>) => Array<Entry>) => setPart((p) => ({...p, history: f(p.history)}), true);
 
@@ -107,7 +112,7 @@ export function PartPage(props: {
       <Grid.Root>
         <Grid.Item span={{base: 'full', medium: 7}}>
           <Stack gap="small" align="stretch">
-            <Viewer
+            <SimpleViewer
               positions={shownPositions}
               bed={[printer.bed[0], printer.bed[1]]}
               theme={theme}
@@ -210,12 +215,21 @@ export function PartPage(props: {
 
       <Grid.Root>
         <Grid.Item span={{base: 'full', medium: 7}}>
-          <Viewer
-            positions={positions}
-            bed={[printer.bed[0], printer.bed[1]]}
-            theme={theme}
-            onSnapshot={(thumb) => setPart((p) => ({...p, thumb}))}
-          />
+          <KadmosViewer positions={positions} bed={printer.bed} theme={theme} />
+          {/* Kadmos can't snapshot, so a short-lived off-screen SimpleViewer keeps Library thumbnails in sync. */}
+          {needsSnap && (
+            <div className="snapshot-source" aria-hidden>
+              <SimpleViewer
+                positions={positions}
+                bed={[printer.bed[0], printer.bed[1]]}
+                theme={theme}
+                onSnapshot={(thumb) => {
+                  setPart((p) => ({...p, thumb}));
+                  setSnapped(snapFor);
+                }}
+              />
+            </div>
+          )}
         </Grid.Item>
         <Grid.Item span={{base: 'full', medium: 5}}>
           <Stack gap="large" align="stretch">

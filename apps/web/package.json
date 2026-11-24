@@ -17,6 +17,7 @@
     "@earendil-works/elanor-icons-react": "^0.1.0",
     "@earendil-works/elanor-react": "^0.1.1",
     "joyful": "^1.3.1",
+    "kadmos": "^2.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "three": "^0.187.0"
