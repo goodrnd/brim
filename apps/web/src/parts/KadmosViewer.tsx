@@ -17,11 +17,13 @@ export function KadmosViewer({
   const viewer = useRef<Handle>(null);
   const mode = theme.endsWith('dark') ? 'dark' : 'light';
   // Each tokenColor call draws to a canvas, so resolve the accent once per theme.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- tokenColor reads CSS that changes with theme
   const accent = useMemo(() => tokenColor('--semantic-color-background-fill-primary', '#3a6ea5'), [theme]);
 
   useEffect(() => {
     viewer.current = Kadmos.mount(host.current!, {theme: mode});
     return () => viewer.current?.destroy();
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- mount once; the effect below syncs theme changes
   }, []);
 
   // Kadmos only parses hex, and uses the accent inside the 3D scene too, so resolve the tokens here.
@@ -35,6 +37,7 @@ export function KadmosViewer({
   useEffect(() => {
     const url = URL.createObjectURL(new Blob([toStl(positions)]));
     // Kadmos renders the error in place; log it so failures stay diagnosable.
+    // oxlint-disable-next-line no-console
     viewer.current?.load(url, {plate, color: accent}).catch((error) => console.error('Kadmos load failed', error));
     return () => URL.revokeObjectURL(url);
   }, [positions, plate, accent]);
