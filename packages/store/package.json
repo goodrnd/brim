@@ -1,0 +1,17 @@
+{
+  "name": "@brim/store",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "kysely": "^0.29.9"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6"
+  }
+}
