@@ -9,6 +9,9 @@ import {join} from 'node:path';
 import {pipeline} from 'node:stream/promises';
 import {Transform} from 'node:stream';
 
+/** The error for an upload or request body over its size cap; told apart by `code`. */
+export const tooLarge = (message: string) => Object.assign(new Error(message), {code: 'TOO_LARGE'});
+
 const shaRe = /^[0-9a-f]{64}$/;
 
 export function bucket(dir: string) {
@@ -31,7 +34,7 @@ export function bucket(dir: string) {
         transform(chunk: Buffer, _, done) {
           size += chunk.length;
           if (size > maxBytes) {
-            return done(new Error('file too large'));
+            return done(tooLarge('file too large'));
           }
           hash.update(chunk);
           done(null, chunk);

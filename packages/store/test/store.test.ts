@@ -128,6 +128,10 @@ void test('state: browser storage is imported once', async (t) => {
       body: JSON.stringify(body),
     }).then((r) => r.json());
   assert.equal((await (await fetch(`${base}/state`)).json()).imported, false);
+  // One bad collection imports nothing, so the next try starts clean.
+  assert.ok((await post({projects: [{id: 'x', name: 'Half', edited: 1}], notes: 'broken'})).error);
+  const before = await (await fetch(`${base}/state`)).json();
+  assert.deepEqual([before.projects, before.imported], [[], false]);
   assert.deepEqual(await post({projects: [{id: 'a', name: 'Desk', edited: 1}], notes: null}), {imported: true});
   assert.deepEqual(await post({projects: [{id: 'b', name: 'Other', edited: 1}]}), {imported: false});
   const state = await (await fetch(`${base}/state`)).json();

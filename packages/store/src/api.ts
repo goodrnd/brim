@@ -13,7 +13,7 @@
  */
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {pipeline} from 'node:stream/promises';
-import type {Bucket} from './bucket.ts';
+import {tooLarge, type Bucket} from './bucket.ts';
 import type {Db, FileTable} from './db.ts';
 import {collections, importOnce, readState, writeCollection, type Collection, type Json} from './state.ts';
 
@@ -24,17 +24,17 @@ const maxBytes = 200 * 1024 * 1024;
 // Parts carry webp thumbnails, so a full library can be a few MB of JSON.
 const maxJson = 50 * 1024 * 1024;
 
-async function json(req: IncomingMessage) {
+async function text(req: IncomingMessage) {
   const chunks: Array<Buffer> = [];
   let size = 0;
   for await (const chunk of req as AsyncIterable<Buffer>) {
     size += chunk.length;
     if (size > maxJson) {
-      throw new Error('body too large');
+      throw tooLarge('body too large');
     }
     chunks.push(chunk);
   }
-  return JSON.parse(Buffer.concat(chunks).toString()) as Json;
+  return Buffer.concat(chunks).toString();
 }
 
 export function storeApi(db: Db, files: Bucket) {
@@ -65,8 +65,9 @@ export function storeApi(db: Db, files: Bucket) {
         return send(415, {error: 'send JSON'});
       }
       let body;
+      const raw = await text(req);
       try {
-        body = await json(req);
+        body = JSON.parse(raw) as Json;
       } catch {
         return send(400, {error: 'send JSON'});
       }
@@ -89,11 +90,7 @@ export function storeApi(db: Db, files: Bucket) {
 
     if (area === 'blobs') {
       if (req.method === 'PUT' && !id) {
-        try {
-          return send(200, await files.put(req, maxBytes));
-        } catch (error) {
-          return send(413, {error: (error as Error).message});
-        }
+        return send(200, await files.put(req, maxBytes));
       }
       if (req.method === 'GET' && shaRe.test(id) && (await files.has(id))) {
         res.setHeader('content-type', 'application/octet-stream');
@@ -118,12 +115,7 @@ export function storeApi(db: Db, files: Bucket) {
       if (Number(req.headers['content-length']) > maxBytes) {
         return send(413, {error: 'file too large'});
       }
-      let blob;
-      try {
-        blob = await files.put(req, maxBytes);
-      } catch (error) {
-        return send(413, {error: (error as Error).message});
-      }
+      const blob = await files.put(req, maxBytes);
       const file: FileTable = {
         id: crypto.randomUUID(),
         name,
@@ -182,7 +174,7 @@ export function storeApi(db: Db, files: Bucket) {
       if (res.headersSent) {
         return res.destroy(error);
       }
-      res.statusCode = 500;
+      res.statusCode = (error as {code?: string}).code === 'TOO_LARGE' ? 413 : 500;
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify({error: error.message}));
     });
