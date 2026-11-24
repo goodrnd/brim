@@ -34,9 +34,10 @@ Dimensions default to millimeters; centimeters and inches also work.
 An npm workspace:
 
 - `apps/web`: the React app.
+- `apps/daemon` (`@brim/daemon`): the Brim daemon, the process that keeps the storage and talks to printers. `api.ts` is everything under `/api`; `main.ts` serves it with the built web app. `npm run dev` mounts the same API on the Vite dev server. Node only.
 - `packages/core` (`@brim/core`): geometry, ops, intent and slicer. Pure TypeScript, runs in the browser and Node.
-- `packages/printer` (`@brim/printer`): Brim's connection to Bambu printers. It runs [bambu-printer-mcp](https://github.com/DMontgomery40/bambu-printer-mcp) as a child process and calls its tools: discover, slice, print, progress, filaments, pause, resume, cancel. `api.ts` is the dev server's `/api/printers` (discover, connect, live status). Node only.
-- `packages/store` (`@brim/store`): the server's storage. A SQLite database through [Kysely](https://kysely.dev) on Node's built-in `node:sqlite` holds parts, projects, notes, jobs and profiles; a local bucket holds file bytes and mesh triangles, named by sha256. Both live in `.brim/` at the repo root (`BRIM_DATA` overrides; delete it to start over). `api.ts` is the dev server's `/api/state`, `/api/blobs` and `/api/files`. On the first visit the web app imports what this browser had in localStorage. Node only.
+- `packages/printer` (`@brim/printer`): Brim's connection to Bambu printers. It runs [bambu-printer-mcp](https://github.com/DMontgomery40/bambu-printer-mcp) as a child process and calls its tools: discover, slice, print, progress, filaments, pause, resume, cancel. `api.ts` is the daemon's `/api/printers` (discover, connect, live status). Node only.
+- `packages/store` (`@brim/store`): the daemon's storage. A SQLite database through [Kysely](https://kysely.dev) on Node's built-in `node:sqlite` holds parts, projects, notes, jobs and profiles; a local bucket holds file bytes and mesh triangles, named by sha256. Both live in `.brim/` at the repo root (`BRIM_DATA` overrides; delete it to start over). `api.ts` is the daemon's `/api/state`, `/api/blobs` and `/api/files`. The web app saves only the items it changed, so two tabs or devices editing different items keep both edits. Node only.
 - `apps/simulator` (`@brim/simulator`): a simulated Bambu printer, for developing without hardware (see below).
 
 The domain vocabulary is in [docs/domain.md](docs/domain.md). Run the commands below from the repo root.
@@ -45,7 +46,7 @@ Built with React, TypeScript, Vite, Three.js, and Elanor UI components. Model ge
 
 ### AI prompts (optional)
 
-With a key in the repo-root `.env` (see `.env.sample`), the dev server sends each prompt to an LLM through [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai). The LLM returns a typed `Spec` or an `Op[]` edit list, never mesh data, and the resolved ops are shown in the history. The default model is `opencode-go/deepseek-v4.1-flash` (`OPENCODE_API_KEY`). Set `BRIM_MODEL=provider/model-id` to use any pi-ai provider, with that provider's usual key variable. Without a key, or when a call fails, Brim uses the built-in rule-based parser. With the [1Password CLI](https://developer.1password.com/docs/cli/), `npm run dev:op` reads the key from the references in `.env.op` instead, so no `.env` is needed.
+With a key in the repo-root `.env` (see `.env.sample`), the daemon sends each prompt to an LLM through [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai). The LLM returns a typed `Spec` or an `Op[]` edit list, never mesh data, and the resolved ops are shown in the history. The default model is `opencode-go/deepseek-v4.1-flash` (`OPENCODE_API_KEY`). Set `BRIM_MODEL=provider/model-id` to use any pi-ai provider, with that provider's usual key variable. Without a key, or when a call fails, Brim uses the built-in rule-based parser. With the [1Password CLI](https://developer.1password.com/docs/cli/), `npm run dev:op` reads the key from the references in `.env.op` instead, so no `.env` is needed.
 
 ```sh
 npm run record -w packages/core   # re-run the paraphrase set against the real LLM and save replies for npm test
@@ -55,6 +56,26 @@ npm run record -w packages/core   # re-run the paraphrase set against the real L
 npm test         # Run self-checks
 npm run build    # Type-check and build for production
 npm run preview  # Serve the production build locally
+npm run daemon   # Serve the production build and the API, see below
+```
+
+### Daemon
+
+`npm run build && npm run daemon` runs Brim as one process on `http://127.0.0.1:2746`: the built web app, the storage and the printer connections. Run it on a machine that shares a network with your printers. It reads the repo-root `.env` and keeps its data in `.brim/`, the same as `npm run dev`.
+
+| Variable     | Default     | Meaning                                                              |
+| ------------ | ----------- | -------------------------------------------------------------------- |
+| `BRIM_PORT`  | `2746`      | Port to listen on.                                                   |
+| `BRIM_HOST`  | `127.0.0.1` | Address to listen on.                                                |
+| `BRIM_HOSTS` | none        | Extra names a browser may reach Brim by, comma-separated. See below. |
+
+The API answers only pages that Brim served itself, and only when the browser reached it as `localhost`, by IP address, or by a name in `BRIM_HOSTS`. Sign-in is still a mock, so anyone who can reach the port can use Brim: keep the daemon on `127.0.0.1` and put access control in front of it.
+
+To use Brim away from home, [Tailscale Serve](https://tailscale.com/kb/1312/serve) can give the daemon an HTTPS address that only your tailnet reaches. This path is not tested yet:
+
+```sh
+BRIM_HOSTS=<machine>.<tailnet>.ts.net npm run daemon
+tailscale serve --bg 2746
 ```
 
 ### Checks
@@ -78,7 +99,7 @@ The X2D reports two nozzles, one external spool per nozzle, a four-slot AMS 2 Pr
 
 bambu-printer-mcp sends X2D prints and controls through Bambu's closed networking plug-in. For the simulator, `BAMBU_NATIVE_HELPER` points it at `apps/simulator/bin/native-helper`, a stand-in that hands the job to the simulator. That tests Brim and the MCP's own checks, not Bambu's transport.
 
-The simulator also announces itself on the LAN the way a real printer does (SSDP on UDP 2021, from this machine's LAN address; `SIM_SSDP=0` turns that off). So in `npm run dev`, Settings → **Find printers** lists it; connect with access code `12345678` to see its live status and AMS spools. Real Bambu printers show up the same way; their access code is on the printer's screen. Brim keeps the code in the dev server's memory only, so after a restart you connect again. Bambu Studio holds UDP 2021 while it runs, so close it to discover.
+The simulator also announces itself on the LAN the way a real printer does (SSDP on UDP 2021, from this machine's LAN address; `SIM_SSDP=0` turns that off). So in `npm run dev`, Settings → **Find printers** lists it; connect with access code `12345678` to see its live status and AMS spools. Real Bambu printers show up the same way; their access code is on the printer's screen. Brim keeps the code in the daemon's memory only, so after a restart you connect again. Bambu Studio holds UDP 2021 while it runs, so close it to discover.
 
 `npm run test:e2e` runs that path end to end without a browser: it starts the simulator and the dev server, discovers the printer, connects (a wrong code is refused) and reads its status. It needs the ports above plus UDP 2021 free and a private LAN address; `npm test` leaves it out. The same command also runs the storage tests, which drive the web app in Chromium against a dev server with a temporary `BRIM_DATA`: parts (imported meshes too), projects, notes and files survive a reload. Install the browser once with `npx playwright install chromium-headless-shell`.
 
