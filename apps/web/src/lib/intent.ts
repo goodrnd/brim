@@ -1,7 +1,7 @@
 import {size as bounds, type Model, type Size, type Spec} from '@brim/core/model.ts';
 import type {Current, Intent} from '@brim/core/intent.ts';
 
-/** Asks the dev server's LLM; undefined when none is configured or it fails, so callers use the regex parser. */
+/** Asks the daemon's LLM; undefined when none is configured or it fails, so callers use the regex parser. */
 export async function askLlm(prompt: string, m?: Model, size?: Size): Promise<Intent | undefined> {
   const current: Current | undefined = !m
     ? undefined

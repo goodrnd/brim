@@ -12,7 +12,6 @@
   "dependencies": {
     "@brim/core": "*",
     "@brim/printer": "*",
-    "@brim/store": "*",
     "@earendil-works/design-tokens": "^0.1.0",
     "@earendil-works/elanor-fonts": "^0.1.0",
     "@earendil-works/elanor-icons-react": "^0.1.0",
@@ -24,6 +23,7 @@
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@brim/daemon": "*",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

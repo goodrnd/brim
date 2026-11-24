@@ -41,7 +41,6 @@ void test('files: upload, dedupe, list, download, delete', async (t) => {
   assert.equal(a.size, 10);
   assert.equal((await readdir(join(dir, 'files', a.sha256.slice(0, 2)))).length, 1);
   assert.equal((await upload('../evil', 'x')).status, 400);
-  assert.equal((await fetch(`${base}/files`, {headers: {origin: 'http://evil.test'}})).status, 403);
   const form = await fetch(`${base}/files?name=x`, {
     method: 'POST',
     headers: {'content-type': 'text/plain'},

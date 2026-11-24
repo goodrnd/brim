@@ -31,7 +31,7 @@ async function api(what: string, path: string, init?: RequestInit) {
 }
 const report = (error_: Error) => alert(error_.message);
 
-/** The Library's Files tab. Needs the dev server; without it, says so. */
+/** The Library's Files tab. Needs the daemon; without it, says so. */
 export function Files({onMakePart}: {onMakePart: (f: File) => void}) {
   const [files, setFiles] = useState<Array<StoredFile>>();
   const [error, setError] = useState('');

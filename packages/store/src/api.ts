@@ -1,5 +1,6 @@
 /**
- * The web app's storage endpoints, as one Node HTTP middleware (calls `next` for any other path):
+ * The web app's storage endpoints, as one Node HTTP middleware (calls `next` for any other path). The daemon's
+ * api.ts mounts it and refuses cross-origin requests before they get here.
  *
  *   GET    /api/state              every collection, see state.ts
  *   PUT    /api/state/<name>       replaces one collection (JSON body)
@@ -43,11 +44,6 @@ export function storeApi(db: Db, files: Bucket) {
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify(value));
     };
-    // Same-origin only, as in /api/printers: Vite's CORS allows any localhost origin.
-    const origin = req.headers.origin;
-    if ((origin && origin !== `http://${req.headers.host}`) || req.headers['sec-fetch-site'] === 'cross-site') {
-      return send(403, {error: 'cross-origin request'});
-    }
     const url = new URL(req.url ?? '', 'http://x');
     const [, area, id = ''] = url.pathname.split('/').slice(1);
     // Writes are JSON or raw bytes, never a form, so a plain HTML form cannot post here.
