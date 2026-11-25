@@ -1,0 +1,22 @@
+{
+  "name": "@brim/daemon",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@brim/core": "*",
+    "@brim/printer": "*",
+    "@brim/store": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

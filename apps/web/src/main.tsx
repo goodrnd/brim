@@ -13,7 +13,7 @@ import {setServer} from './lib/store.ts';
 migrate(localStorage);
 const root = createRoot(document.getElementById('root')!);
 try {
-  // The dev server's database when it runs; a static build keeps localStorage.
+  // The daemon's database when there is one; a static build keeps localStorage.
   setServer(await loadState(localStorage));
   root.render(<App />);
 } catch (error) {

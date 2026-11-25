@@ -1,8 +1,9 @@
 /**
- * The web app's storage endpoints, as one Node HTTP middleware (calls `next` for any other path):
+ * The web app's storage endpoints, as one Node HTTP middleware (calls `next` for any other path). The daemon's
+ * api.ts mounts it and refuses cross-origin requests before they get here.
  *
  *   GET    /api/state              every collection, see state.ts
- *   PUT    /api/state/<name>       replaces one collection (JSON body)
+ *   PATCH  /api/state/<name>       saves the changed items of one collection: JSON {put, remove}, see state.ts
  *   PUT    /api/blobs              raw bytes → {sha256, size}; used for mesh triangles
  *   GET    /api/blobs/<sha256>     the bytes
  *   GET    /api/files              every File, newest first
@@ -14,7 +15,7 @@ import type {IncomingMessage, ServerResponse} from 'node:http';
 import {pipeline} from 'node:stream/promises';
 import {tooLarge, type Bucket} from './bucket.ts';
 import type {Db, FileTable} from './db.ts';
-import {collections, readState, writeCollection, type Collection, type Json} from './state.ts';
+import {collections, patchCollection, readState, type Collection, type Json} from './state.ts';
 
 const idRe = /^[0-9a-f-]{36}$/;
 const shaRe = /^[0-9a-f]{64}$/;
@@ -43,11 +44,6 @@ export function storeApi(db: Db, files: Bucket) {
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify(value));
     };
-    // Same-origin only, as in /api/printers: Vite's CORS allows any localhost origin.
-    const origin = req.headers.origin;
-    if ((origin && origin !== `http://${req.headers.host}`) || req.headers['sec-fetch-site'] === 'cross-site') {
-      return send(403, {error: 'cross-origin request'});
-    }
     const url = new URL(req.url ?? '', 'http://x');
     const [, area, id = ''] = url.pathname.split('/').slice(1);
     // Writes are JSON or raw bytes, never a form, so a plain HTML form cannot post here.
@@ -71,8 +67,8 @@ export function storeApi(db: Db, files: Bucket) {
         return send(400, {error: 'send JSON'});
       }
       try {
-        if (req.method === 'PUT' && collections.includes(id as Collection)) {
-          await writeCollection(db, id as Collection, body);
+        if (req.method === 'PATCH' && collections.includes(id as Collection)) {
+          await patchCollection(db, id as Collection, body);
           return send(200, {});
         }
       } catch (error) {

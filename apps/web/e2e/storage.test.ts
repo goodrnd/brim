@@ -1,5 +1,5 @@
 /**
- * Storage end to end: the real dev server with its SQLite db and file bucket in a temp dir, driven by Chromium.
+ * Storage end to end: the dev server with the daemon's API, its SQLite db and file bucket in a temp dir, driven by Chromium.
  * Checks what a person sees survive a reload, including imported meshes.
  * Needs Playwright's Chromium (`npx playwright install chromium`).
  */
@@ -52,7 +52,7 @@ async function signIn(page: Page) {
 
 /** Waits for the debounced save to reach the server. */
 const saved = (page: Page, collection: string) =>
-  page.waitForResponse((r) => r.url().endsWith(`/api/state/${collection}`) && r.request().method() === 'PUT');
+  page.waitForResponse((r) => r.url().endsWith(`/api/state/${collection}`) && r.request().method() === 'PATCH');
 
 void test('parts, imported meshes, projects, notes and files survive a reload', async (t) => {
   const {data, url, page} = await start(t);
@@ -150,7 +150,10 @@ void test('a save a closing page could not send is sent on the next visit', asyn
   await signIn(page);
   // What `save` leaves behind when the body is too big for a keepalive request.
   await page.evaluate(() =>
-    localStorage.setItem('brim-unsent-projects', JSON.stringify([{id: 'late', name: 'Late save', edited: 1}])),
+    localStorage.setItem(
+      'brim-unsent-projects',
+      JSON.stringify({put: [{id: 'late', name: 'Late save', edited: 1}], remove: []}),
+    ),
   );
   await page.goto(`${url}#/library/projects`);
   await page.reload();

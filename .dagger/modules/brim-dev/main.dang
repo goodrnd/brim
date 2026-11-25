@@ -76,7 +76,7 @@ type BrimDev {
   }
 
   """
-  Type-check and build the web app (npm run build).
+  Type-check the daemon and the web app, and build the web app (npm run build).
   """
   pub build: Void @check {
     dist.sync

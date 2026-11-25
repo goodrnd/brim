@@ -1,5 +1,6 @@
 /**
- * The web app's printer endpoints, as Node HTTP middleware mounted at /api/printers:
+ * The web app's printer endpoints, as Node HTTP middleware. The daemon's api.ts mounts it at /api/printers and
+ * refuses cross-origin requests before they get here.
  *
  *   GET  /discover        Bambu printers announcing on the LAN
  *   POST /<serial>        {host, model, token}: connect; 401 when the printer does not answer with that code
@@ -42,11 +43,6 @@ export function printersApi({find = discover, open = connect}: {find?: Discover;
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify(value));
     };
-    // Same-origin only: Vite's CORS allows any localhost origin, and a cross-site GET /discover would spawn the MCP.
-    const origin = req.headers.origin;
-    if ((origin && origin !== `http://${req.headers.host}`) || req.headers['sec-fetch-site'] === 'cross-site') {
-      return send(403, {error: 'cross-origin request'});
-    }
     const url = new URL(req.url ?? '', 'http://x');
     const path = url.pathname.replace(/^\/+/, '');
     if (req.method === 'GET' && path === 'discover') {

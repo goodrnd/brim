@@ -43,8 +43,6 @@ void test('printers api: discover, reject bad input and codes, connect, status w
     body: JSON.stringify({host: '192.168.1.5', model: 'x2d', token}),
   });
   assert.equal(simple.status, 415);
-  const cross = await fetch(`${base}/discover`, {headers: {origin: 'http://localhost:9999'}});
-  assert.equal(cross.status, 403);
   assert.equal((await post({host: 'printer.local', model: 'x2d', token}))[0], 400);
   assert.equal((await post({host: '8.8.8.8', model: 'x2d', token}))[0], 400);
   assert.equal((await post({host: '192.168.1.5', model: 'nope', token}))[0], 400);

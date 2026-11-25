@@ -1,4 +1,4 @@
-// The dev server's storage (@brim/store). Without it (a static build), the app keeps using localStorage.
+// The daemon's storage (@brim/store). Without a daemon (a static build), the app keeps using localStorage.
 import type {Model} from '@brim/core/model.ts';
 import type {Material, Printer, SliceSettings} from '@brim/core/slicer.ts';
 import type {Job} from '../jobs/Jobs.tsx';
@@ -111,9 +111,13 @@ export async function loadState(storage: Pick<Storage, 'getItem' | 'removeItem'>
   let changed = false;
   // Saves a closing page could not send (see `save`).
   for (const collection of Object.keys(keys) as Array<Collection>) {
-    const body = storage.getItem(unsent(collection));
+    let body = storage.getItem(unsent(collection));
     if (body !== null) {
-      await put(collection, body, false);
+      // Parked before saves became {put, remove}: the whole collection, which saves as a put of everything.
+      if (!body.startsWith('{"put":')) {
+        body = `{"put":${body},"remove":[]}`;
+      }
+      await patch(collection, body, false);
       storage.removeItem(unsent(collection));
       changed = true;
     }
@@ -126,9 +130,9 @@ export async function loadState(storage: Pick<Storage, 'getItem' | 'removeItem'>
 
 const unsent = (collection: Collection) => `brim-unsent-${collection}`;
 
-async function put(collection: Collection, body: string, keepalive: boolean) {
+async function patch(collection: Collection, body: string, keepalive: boolean) {
   const r = await fetch(`/api/state/${collection}`, {
-    method: 'PUT',
+    method: 'PATCH',
     headers: {'content-type': 'application/json'},
     body,
     keepalive,
@@ -138,18 +142,52 @@ async function put(collection: Collection, body: string, keepalive: boolean) {
   }
 }
 
+type Item = {id: string} | Use;
+const nameOf = (item: Item) => ('id' in item ? item.id : JSON.stringify([item.projectId, item.itemId]));
+
+/**
+ * What changed in a collection between `from` (what the server has) and `to`, as the server's `{put, remove}`.
+ * Items are compared by identity: an edit makes a new object and leaves the others as they were.
+ */
+export function changes(collection: Collection, from: unknown, to: unknown) {
+  if (collection === 'slice') {
+    return {put: to, remove: []};
+  }
+  if (collection === 'printers' || collection === 'materials') {
+    type Profiles = Record<string, Printer | Material>;
+    const [old, now] = [(from ?? {}) as Profiles, to as Profiles];
+    return {
+      put: Object.fromEntries(Object.entries(now).filter(([id, profile]) => old[id] !== profile)),
+      remove: Object.keys(old).filter((id) => !Object.hasOwn(now, id)),
+    };
+  }
+  const [old, now] = [from as Array<Item>, to as Array<Item>];
+  const before = new Map(old.map((item) => [nameOf(item), item]));
+  const kept = new Set(now.map(nameOf));
+  return {
+    put: now.filter((item) => before.get(nameOf(item)) !== item),
+    remove: old
+      .filter((item) => !kept.has(nameOf(item)))
+      .map((item) => ('id' in item ? item.id : {projectId: item.projectId, itemId: item.itemId})),
+  };
+}
+
 let closingBytes = 0; // keepalive bodies in flight
 
 /**
- * Replaces one collection on the server. `closing` is a save from a page that is going away: only a keepalive
- * request outlives the page, and browsers cap those at 64 KB in total, so a larger one waits in localStorage
- * for `loadState` on the next visit.
+ * Saves what changed in one collection since `from`, the value the server has. `closing` is a save from a page
+ * that is going away: only a keepalive request outlives the page, and browsers cap those at 64 KB in total, so a
+ * larger one waits in localStorage for `loadState` on the next visit.
  * shortcut: a mesh imported in the moment before closing is lost with that save, its upload cannot outlive the page.
  */
-export async function save(collection: Collection, value: unknown, closing = false) {
-  const body = JSON.stringify(collection === 'parts' ? await partsToServer(value as Array<Part>) : value);
+export async function save(collection: Collection, from: unknown, to: unknown, closing = false) {
+  const {put, remove} = changes(collection, from, to);
+  if (collection !== 'slice' && !Object.keys(put as object).length && !remove.length) {
+    return;
+  }
+  const body = JSON.stringify({put: collection === 'parts' ? await partsToServer(put as Array<Part>) : put, remove});
   if (!closing) {
-    await put(collection, body, false);
+    await patch(collection, body, false);
     // A page restored from the back/forward cache may have parked an older save.
     return localStorage.removeItem(unsent(collection));
   }
@@ -158,5 +196,5 @@ export async function save(collection: Collection, value: unknown, closing = fal
     return localStorage.setItem(unsent(collection), body);
   }
   closingBytes += size;
-  await put(collection, body, true).finally(() => (closingBytes -= size));
+  await patch(collection, body, true).finally(() => (closingBytes -= size));
 }

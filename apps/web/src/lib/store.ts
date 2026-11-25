@@ -12,6 +12,9 @@ export const setServer = (state: ServerState | undefined) => void (server = stat
 const pending = new Map<string, Promise<void>>(); // one save in flight per key, so an older one cannot land last
 const latest = new Map<string, unknown>();
 const failed = new Set<string>();
+const saved = new Map<string, unknown>(); // per key, the newest value the server took
+/** What the server has for `key`: only the difference from it is sent. */
+const onServer = (key: string, collection: Collection) => (saved.has(key) ? saved.get(key) : server![collection]);
 
 /**
  * Saves `value` after the save before it, and retries a failed save while the value is still the newest.
@@ -19,7 +22,10 @@ const failed = new Set<string>();
  */
 function queue(key: string, collection: Collection, value: unknown) {
   latest.set(key, value);
-  const run = (pending.get(key) ?? Promise.resolve()).then(() => save(collection, value));
+  const run = (pending.get(key) ?? Promise.resolve()).then(async () => {
+    await save(collection, onServer(key, collection), value);
+    saved.set(key, value);
+  });
   pending.set(
     key,
     run.then(
@@ -45,7 +51,7 @@ function queue(key: string, collection: Collection, value: unknown) {
 }
 
 /**
- * useState persisted to the dev server's database when it runs, else to localStorage.
+ * useState persisted to the daemon's database when there is one, else to localStorage.
  * Missing, broken or empty-list values fall back to `fallback`. `toJson` applies to localStorage only.
  */
 export function useStored<T>(
@@ -77,7 +83,7 @@ export function useStored<T>(
     const store = (closing?: Event) => {
       if (collection && closing) {
         // The page is going away: no waiting for the save in flight, and nobody left to tell if it fails.
-        return void save(collection, value, true).catch(() => {});
+        return void save(collection, onServer(key, collection), value, true).catch(() => {});
       }
       if (collection) {
         return queue(key, collection, value);

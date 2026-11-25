@@ -17,11 +17,12 @@ async function serve(t: TestContext) {
   const server = createServer((req, res) => api(req, res, () => ((res.statusCode = 418), res.end()))).listen(0);
   t.after(async () => (server.close(), await db.destroy(), await rm(dir, {recursive: true})));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
-  const put = (path: string, body: unknown) =>
+  /** Saves items to a collection, as the web app does. */
+  const put = (path: string, put: unknown, remove: Array<unknown> = []) =>
     fetch(`${base}/${path}`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: {'content-type': 'application/json'},
-      body: JSON.stringify(body),
+      body: JSON.stringify({put, remove}),
     });
   return {dir, db, files, base, put};
 }
@@ -41,7 +42,6 @@ void test('files: upload, dedupe, list, download, delete', async (t) => {
   assert.equal(a.size, 10);
   assert.equal((await readdir(join(dir, 'files', a.sha256.slice(0, 2)))).length, 1);
   assert.equal((await upload('../evil', 'x')).status, 400);
-  assert.equal((await fetch(`${base}/files`, {headers: {origin: 'http://evil.test'}})).status, 403);
   const form = await fetch(`${base}/files?name=x`, {
     method: 'POST',
     headers: {'content-type': 'text/plain'},
@@ -66,7 +66,7 @@ void test('files: upload, dedupe, list, download, delete', async (t) => {
   assert.equal((await fetch(`${base.replace('/api', '')}/other`)).status, 418, 'other paths fall through');
 });
 
-void test('state: collections round-trip in order, mesh entries by hash, bad input keeps the old value', async (t) => {
+void test('state: collections round-trip, mesh entries by hash, bad input keeps the old value', async (t) => {
   const {base, put} = await serve(t);
   const blob = await (
     await fetch(`${base}/blobs`, {method: 'PUT', body: new Uint8Array(new Float32Array([1, 2, 3]).buffer)})
@@ -107,7 +107,7 @@ void test('state: collections round-trip in order, mesh entries by hash, bad inp
   assert.equal((await put('state/nope', [])).status, 404);
 
   const state = await (await fetch(`${base}/state`)).json();
-  assert.deepEqual(state.parts, parts, 'same order and shape; unset fields stay unset');
+  assert.deepEqual(state.parts, parts, 'newest first, same shape; unset fields stay unset');
   assert.equal(state.jobs[0].grams, 1.5);
   assert.equal('outcome' in state.jobs[0], false);
   assert.deepEqual(state.printers, {mk4: {name: 'MK4', bed: [250, 210, 220]}});
@@ -117,6 +117,54 @@ void test('state: collections round-trip in order, mesh entries by hash, bad inp
   const bytes = new Float32Array(await (await fetch(`${base}/blobs/${blob.sha256}`)).arrayBuffer());
   assert.deepEqual([...bytes], [1, 2, 3]);
   assert.equal((await fetch(`${base}/blobs/${'0'.repeat(64)}`)).status, 404);
+});
+
+const note = (id: string, body: string) => ({id, projectId: 'p', body, edited: 1});
+const part = (id: string, name: string, edited: number) => ({
+  id,
+  name,
+  edited,
+  history: [{prompt: name, changes: [], model: {type: 'param', spec: {kind: 'box'}}}],
+});
+
+void test('state: a save touches only the items it names', async (t) => {
+  const {base, put} = await serve(t);
+  const read = async () => (await fetch(`${base}/state`)).json();
+  await put('state/notes', [note('a', 'one'), note('b', 'two'), note('c', 'three')]);
+  await put('state/parts', [part('x', 'Box', 1), part('y', 'Tray', 2)]);
+  await put('state/uses', [
+    {projectId: 'p', itemId: 'x', qty: 1},
+    {projectId: 'p', itemId: 'y', qty: 1},
+  ]);
+  await put('state/printers', {mk4: {name: 'MK4'}, x2d: {name: 'X2D'}});
+
+  // Two clients that both loaded the state above, each saving its own edit.
+  await put('state/notes', [note('a', 'ONE')]);
+  await put('state/notes', [note('d', 'four')], ['b']);
+  await put('state/parts', [part('x', 'Box v2', 3)]);
+  await put('state/parts', [], ['y']);
+  await put('state/uses', [{projectId: 'p', itemId: 'x', qty: 2}], [{projectId: 'p', itemId: 'y'}]);
+  await put('state/printers', {mk4: {name: 'MK4S'}}, ['x2d']);
+
+  const state = await read();
+  assert.deepEqual(
+    state.notes.map((n: {body: string}) => n.body),
+    ['ONE', 'three', 'four'],
+    'both edits kept, in the order the notes were added',
+  );
+  assert.deepEqual(state.parts, [part('x', 'Box v2', 3)]);
+  assert.deepEqual(state.uses, [{projectId: 'p', itemId: 'x', qty: 2}]);
+  assert.deepEqual(state.printers, {mk4: {name: 'MK4S'}});
+
+  assert.equal((await put('state/notes', [note('e', 'five'), {body: 'no id'}])).status, 400);
+  assert.equal((await put('state/uses', [], ['x'])).status, 400, 'a use is named by project and item');
+  assert.equal(
+    (await fetch(`${base}/state/notes`, {method: 'PATCH', headers: {'content-type': 'application/json'}, body: '[]'}))
+      .status,
+    400,
+  );
+  assert.equal((await put('state/slice', undefined)).status, 400, 'a save without put');
+  assert.equal((await read()).notes.length, 3, 'a refused save changes nothing');
 });
 
 void test('bucket: rejects uploads over the cap and leaves no temp file', async (t) => {

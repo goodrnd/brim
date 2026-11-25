@@ -26,7 +26,8 @@ Printer · Material         profiles
 - **Use**: `{projectId, itemId, qty}` links a Project to a Part, File or Component. `qty` is how many to print or how many are needed; Files ignore it. One item can have Uses in many Projects.
 - **Note**: markdown body, always in one Project. Several small notes, not one document, so the user and agents can add without conflicts.
 - **Job**: one print of a Part, at `#/jobs` and `#/job/<id>`: which Part, printer, material and settings, with the slicer's time and filament estimate. `outcome` is unset while queued, then `ok` or `failed` (with an optional `note`), set by a person. A printer reporting "finished" is not `ok`: firmware only knows its commands ran.
-- **Printer**, **Material**: slicing profiles. Stock presets live in `@brim/core/slicer.ts`; users edit and add their own. A Printer is a profile; with a `serial` it is also that one physical printer. Identical printers are separate Printers (duplicate, then set each serial), so each can be addressed on its own. Serials are unique; "Reset to presets" keeps Printers that have one. A Bambu Printer also names its `bambuModel` (the `bambu_model` that [bambu-printer-mcp](https://dmontgomery40.github.io/bambu-printer-mcp/reference/printer-tools) takes); Brim finds the printer's host and serial by discovery (SSDP); the access code comes from a person, is held only in the Brim server's memory and the MCP's env, and is never stored or sent to the browser.
+- **Daemon**: the Brim process on the printers' network (`apps/daemon`). It keeps the storage, holds the printer connections and serves the web app; a browser is only a view of it. `npm run dev` runs its API inside the Vite dev server.
+- **Printer**, **Material**: slicing profiles. Stock presets live in `@brim/core/slicer.ts`; users edit and add their own. A Printer is a profile; with a `serial` it is also that one physical printer. Identical printers are separate Printers (duplicate, then set each serial), so each can be addressed on its own. Serials are unique; "Reset to presets" keeps Printers that have one. A Bambu Printer also names its `bambuModel` (the `bambu_model` that [bambu-printer-mcp](https://dmontgomery40.github.io/bambu-printer-mcp/reference/printer-tools) takes); Brim finds the printer's host and serial by discovery (SSDP); the access code comes from a person, is held only in the daemon's memory and the MCP's env, and is never stored or sent to the browser.
 
 ## Rules
 
@@ -43,9 +44,9 @@ Printer · Material         profiles
 
 ## Status
 
-Built: Part, Entry, Job, Printer, Material, Project, Note, Use (Parts only; `qty` has no UI yet and is always 1), File. Notes are plain text for now. Bambu Printers can be found on the LAN and connected for live status; access codes are re-entered after a server restart.
+Built: Part, Entry, Job, Printer, Material, Project, Note, Use (Parts only; `qty` has no UI yet and is always 1), File. Notes are plain text for now. Bambu Printers can be found on the LAN and connected for live status; access codes are re-entered after a daemon restart.
 
-Storage (`@brim/store`): the dev server keeps everything in SQLite (Kysely on `node:sqlite`) and file bytes in a local bucket named by sha256, both in `.brim/`. A mesh Entry stores its triangles in the bucket and names them by `sha256`. A static build without the server still uses localStorage and drops mesh entries.
+Storage (`@brim/store`): the daemon keeps everything in SQLite (Kysely on `node:sqlite`) and file bytes in a local bucket named by sha256, both in `.brim/`. A mesh Entry stores its triangles in the bucket and names them by `sha256`. A client saves only the items it changed, so clients editing different items keep both edits; on the same item the last save wins, and a client sees another client's edits when it reloads. A static build without a daemon still uses localStorage and drops mesh entries.
 
 Next: Component, plus:
 

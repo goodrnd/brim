@@ -60,7 +60,7 @@ import {
 } from './lib/library.ts';
 import {ProjectPage} from './projects/Projects.tsx';
 
-// Without the dev server (a static build) imported meshes are not saved, and thumbnails share the ~5 MB localStorage quota.
+// Without a daemon (a static build) imported meshes are not saved, and thumbnails share the ~5 MB localStorage quota.
 const storable = (ps: Array<Part>) =>
   ps.flatMap((p) => {
     const history = p.history.filter((e) => e.model.type === 'param');

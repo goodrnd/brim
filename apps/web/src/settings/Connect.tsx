@@ -103,7 +103,7 @@ export function Camera({serial, name}: {serial: string; name: string}) {
 
 /**
  * Settings → Find printers: lists Bambu printers announcing on the LAN; connecting one asks for its access code and
- * creates or updates the Brim Printer with that serial. The code goes to the dev server only.
+ * creates or updates the Brim Printer with that serial. The code goes to the daemon only.
  */
 export function BambuPrinters({
   printers,
