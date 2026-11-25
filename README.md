@@ -4,6 +4,8 @@ Brim is a tool for making all kinds of things. Start with an idea, shape it, and
 
 The current prototype focuses on 3D-printable objects: describe a part, refine its shape, and export files for printing—all in your browser.
 
+Until further notice, the main target printer is the **Bambu Lab X2D**. Build, test and slice for it first.
+
 ## Getting started
 
 ```sh
