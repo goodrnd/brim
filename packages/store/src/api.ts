@@ -11,6 +11,7 @@
  *   DELETE /api/files/<id>         removes the File and its Uses; its bytes go when no other File has them
  *   GET    /api/filaments          {filaments, synced, syncing, error}, see filaments.ts
  *   POST   /api/filaments/sync     starts reading the shop again; 202 at once, poll the list
+ *   DELETE /api/filaments/sync     stops the active refresh; previously read rows are kept
  *   PUT    /api/filaments/<id>     {onHand}: the spools a person has
  */
 import type {IncomingMessage, ServerResponse} from 'node:http';
@@ -95,6 +96,10 @@ export function storeApi(db: Db, files: Bucket, crawl: Crawl = bambuEu) {
       if (req.method === 'POST' && id === 'sync') {
         void filaments.sync();
         return send(202, {});
+      }
+      if (req.method === 'DELETE' && id === 'sync') {
+        await filaments.stop();
+        return send(200, {});
       }
       if (req.method === 'PUT' && id) {
         let onHand;

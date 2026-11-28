@@ -179,7 +179,11 @@ void test('the filament catalog loads from the shop, filters, and keeps the spoo
   await page.getByRole('link', {name: 'PA6-CF', exact: true}).waitFor();
   await page.getByText(/hardened-steel 0\.6 mm nozzle/).waitFor();
   await page.getByRole('button', {name: 'Load catalog'}).click();
-  await page.getByRole('status').filter({hasText: 'Reading the shop'}).waitFor();
+  await page.getByRole('status').filter({hasText: 'Finding products on collection page'}).waitFor();
+  await page.getByRole('button', {name: 'Stop refresh'}).click();
+  await page.getByText(/^Refresh stopped/).waitFor();
+  await page.getByRole('button', {name: 'Load catalog'}).click();
+  await page.getByText(/of 2 product pages read/).waitFor();
   // Four requests to the shop, two seconds apart.
   await page.getByText(/^Updated /).waitFor({timeout: 30_000});
   const cards = page.locator('.filament');

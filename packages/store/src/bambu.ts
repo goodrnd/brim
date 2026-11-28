@@ -4,7 +4,7 @@
  * colour and packaging.
  */
 import {setTimeout as sleep} from 'node:timers/promises';
-import type {CatalogFilament, Offer} from './filaments.ts';
+import type {Activity, CatalogFilament, Offer} from './filaments.ts';
 
 const shop = 'bambu-eu';
 const base = 'https://eu.store.bambulab.com';
@@ -96,11 +96,18 @@ export function parseProduct(html: string): Array<CatalogFilament> {
   return [...byCode.values()];
 }
 
-async function fetchPage(url: string) {
+async function fetchPage(url: string, signal: AbortSignal, retry: (at?: number) => void) {
   for (let attempt = 0; ; attempt++) {
     // The shop answers 429 after a few dozen requests in a row, so each request waits its turn.
-    await sleep(attempt ? 30_000 : 2000);
-    const r = await fetch(url, {headers: {'user-agent': 'Brim filament catalog'}, signal: AbortSignal.timeout(30_000)});
+    if (attempt) {
+      retry(Date.now() + 30_000);
+    }
+    await sleep(attempt ? 30_000 : 2000, undefined, {signal});
+    retry();
+    const r = await fetch(url, {
+      headers: {'user-agent': 'Brim filament catalog'},
+      signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+    });
     if (r.status === 429 && attempt < 3) {
       await r.body?.cancel();
     } else if (r.ok) {
@@ -112,17 +119,28 @@ async function fetchPage(url: string) {
 }
 
 /** Every filament the shop lists, one product page at a time: about 65 requests over four minutes. */
-export async function* bambuEu(get: (url: string) => Promise<string> = fetchPage) {
+export async function* bambuEu(signal: AbortSignal, report: (activity: Activity) => void, get = fetchPage) {
+  const read = (url: string, activity: Activity) => {
+    report(activity);
+    return get(url, signal, (retryAt) => report({...activity, retryAt}));
+  };
   const slugs = new Set<string>();
   // The collection is paged; a page past the end repeats or lists nothing.
   for (let page = 1, before = -1; page <= 20 && slugs.size > before; page++) {
     before = slugs.size;
-    const html = await get(`${base}/collections/bambu-lab-3d-printer-filament?page=${page}`);
+    const html = await read(`${base}/collections/bambu-lab-3d-printer-filament?page=${page}`, {
+      step: `Finding products on collection page ${page}`,
+      done: slugs.size,
+    });
     for (const m of html.matchAll(/href="(?:\/[a-z]{2})?\/products\/([a-z0-9-]+)/g)) {
       slugs.add(m[1]);
     }
   }
+  let done = 0;
   for (const slug of slugs) {
-    yield parseProduct(await get(`${base}/products/${slug}`));
+    yield parseProduct(
+      await read(`${base}/products/${slug}`, {step: `Reading ${slug.replaceAll('-', ' ')}`, done, total: slugs.size}),
+    );
+    done++;
   }
 }

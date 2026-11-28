@@ -102,8 +102,10 @@ export function Filaments() {
     return null;
   }
 
-  const sync = () =>
-    api('Could not refresh the catalog', '/api/filaments/sync', {method: 'POST'})
+  const sync = (stop = false) =>
+    api(stop ? 'Could not stop the refresh' : 'Could not refresh the catalog', '/api/filaments/sync', {
+      method: stop ? 'DELETE' : 'POST',
+    })
       .then(load)
       .catch((error_: Error) => setError(error_.message));
   async function save(f: Filament, delta: number) {
@@ -161,6 +163,7 @@ export function Filaments() {
       words.every((w) => text.includes(w))
     );
   });
+  const {activity} = catalog;
   const products = [...new Set(catalog.filaments.map((f) => f.product))].sort();
   const spools = catalog.filaments.reduce((n, f) => n + f.onHand, 0);
 
@@ -240,15 +243,43 @@ export function Filaments() {
           )
         );
       })}
+      {catalog.stopped && <Text role="status">Refresh stopped. Start a new refresh to read the shop again.</Text>}
       {catalog.error && (
         <Text className="negative" role="alert">
           The catalog could not be refreshed: {catalog.error}
         </Text>
       )}
       {catalog.syncing ? (
-        <Text className="muted" role="status">
-          Reading the shop: {count(catalog.found ?? 0, 'colour')} found so far.
-        </Text>
+        <section aria-label="Catalog refresh">
+          <Heading level={2} size={5}>
+            Reading the shop
+          </Heading>
+          <p role="status">
+            {activity?.step ?? 'Starting refresh'} · {count(catalog.found ?? 0, 'colour')} found so far.
+          </p>
+          <progress
+            aria-label="Product pages read"
+            value={activity?.total ? activity.done : undefined}
+            max={activity?.total}
+          />
+          <p>
+            {activity?.total
+              ? `${activity.done} of ${activity.total} product pages read`
+              : `${activity?.done ?? 0} product pages discovered`}
+          </p>
+          {activity?.retryAt && (
+            <p role="status">
+              The shop is limiting requests. Retrying at {new Date(activity.retryAt).toLocaleTimeString()}.
+            </p>
+          )}
+          <p>
+            You can browse or leave this page while the server reads the shop. Stopping keeps the colours already
+            loaded.
+          </p>
+          <Button hierarchy="secondary" onClick={() => void sync(true)}>
+            Stop refresh
+          </Button>
+        </section>
       ) : catalog.synced ? (
         <Text className="muted">
           Updated {new Date(catalog.synced).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})}.

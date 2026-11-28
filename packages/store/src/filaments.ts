@@ -35,11 +35,17 @@ export interface Catalog {
   synced?: number; // start (ms) of the last sync that read the whole shop
   syncing: boolean;
   found?: number; // distinct colours read during the current sync
+  activity?: Activity;
+  stopped?: boolean;
   error?: string; // why the last sync failed
 }
 
 /** Reads a shop, one batch of Filaments per product. Throws when the shop cannot be read. */
-export type Crawl = () => AsyncIterable<Array<CatalogFilament>>;
+export type Activity = {step: string; done: number; total?: number; retryAt?: number};
+export type Crawl = (
+  signal: AbortSignal,
+  report: (activity: Activity) => void,
+) => AsyncIterable<Array<CatalogFilament>>;
 
 const hour = 3_600_000;
 const syncedKey = 'filaments-synced';
@@ -48,6 +54,9 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
   let syncing: Promise<void> | undefined;
   let error: string | undefined;
   const found = new Set<string>();
+  let controller: AbortController;
+  let activity: Activity | undefined;
+  let stopped = false;
 
   /** Start (ms) of the last sync that read the whole shop. */
   const synced = async () => {
@@ -57,8 +66,16 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
 
   async function run() {
     const started = Date.now();
+    controller = new AbortController();
+    const {signal} = controller;
+    error = undefined;
+    stopped = false;
+    activity = undefined;
     found.clear();
-    for await (const batch of crawl()) {
+    for await (const batch of crawl(signal, (step) => {
+      activity = step;
+    })) {
+      signal.throwIfAborted();
       for (const {offers, ...filament} of batch) {
         const row = {...filament, offers: JSON.stringify(offers), seen: started};
         await db
@@ -69,6 +86,7 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
         found.add(row.id);
       }
     }
+    signal.throwIfAborted();
     if (!found.size) {
       throw new Error('The shop listed no filament. Its pages may have changed.');
     }
@@ -86,7 +104,13 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
     (syncing ??= run()
       .then(
         () => void (error = undefined),
-        (error_: Error) => void (error = error_.message),
+        (error_: Error) => {
+          if (controller.signal.aborted) {
+            stopped = true;
+          } else {
+            error = error_.message;
+          }
+        },
       )
       .finally(() => void (syncing = undefined)));
 
@@ -104,6 +128,12 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
 
   return {
     sync,
+    async stop() {
+      if (syncing) {
+        controller.abort();
+        await syncing;
+      }
+    },
     /** Every Filament in shop order. */
     async list(): Promise<Catalog> {
       const rows = await db
@@ -115,6 +145,8 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
         filaments: rows.map((r) => ({...r, offers: JSON.parse(r.offers) as Array<Offer>})),
         synced: await synced(),
         syncing: !!syncing,
+        stopped: stopped || undefined,
+        activity: syncing ? activity : undefined,
         found: syncing ? found.size : undefined,
         error,
       };
@@ -124,6 +156,9 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
       const r = await db.updateTable('filaments').set({onHand}).where('id', '=', id).executeTakeFirst();
       return r.numUpdatedRows > 0n;
     },
-    close: () => clearInterval(timer),
+    close: () => {
+      clearInterval(timer);
+      controller?.abort();
+    },
   };
 }

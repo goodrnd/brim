@@ -82,9 +82,20 @@ void test('bambu: walks the collection pages, then each product once', async () 
         : page(url.endsWith('abs') ? 'ABS' : 'PLA Basic', [`Black (${url.endsWith('abs') ? 40_101 : 10_101}) / 1kg`]);
   };
   const found = [];
-  for await (const batch of bambuEu(get)) {
+  const steps: Array<string> = [];
+  for await (const batch of bambuEu(
+    new AbortController().signal,
+    (a) => steps.push(`${a.step}: ${a.done}/${a.total ?? '?'}`),
+    get,
+  )) {
     found.push(...batch.map((f) => f.id));
   }
+  assert.deepEqual(steps, [
+    'Finding products on collection page 1: 0/?',
+    'Finding products on collection page 2: 2/?',
+    'Reading pla basic: 0/2',
+    'Reading abs: 1/2',
+  ]);
   assert.deepEqual(found, ['bambu-eu-10101', 'bambu-eu-40101']);
   assert.deepEqual(asked, [
     '/collections/bambu-lab-3d-printer-filament?page=1',
