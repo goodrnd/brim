@@ -32,6 +32,20 @@ const keys = {
 export type Collection = keyof typeof keys;
 export const collectionOf = (key: string) => (Object.keys(keys) as Array<Collection>).find((c) => keys[c] === key);
 
+/** Fetches from the dev server's API; a failed response throws `what` with the server's reason. */
+export async function api(what: string, url: string, init?: RequestInit) {
+  const r = await fetch(url, init);
+  const type = r.headers.get('content-type') ?? '';
+  // A static host answers with a page (404, or 200 with an SPA fallback), not the API.
+  if (type.startsWith('text/html') && (r.ok || r.status === 404)) {
+    throw new Error('This needs the Brim server.');
+  }
+  if (!r.ok) {
+    throw new Error(`${what}: ${type.startsWith('application/json') ? (await r.json()).error : r.status}`);
+  }
+  return r;
+}
+
 const sent = new WeakMap<Float32Array, string>(); // triangles already in the bucket, by sha256
 
 async function putBlob(positions: Float32Array) {

@@ -2,6 +2,7 @@ import {Button, EmptyState, IconButton, Stack, Text} from '@earendil-works/elano
 import {useEffect, useRef, useState} from 'react';
 import {AddIcon, DeleteIcon, UploadFileIcon, ViewInArIcon} from '../ui/icons.ts';
 import {meshFormats} from '../lib/mesh.ts';
+import {api as serverApi} from '../lib/server.ts';
 
 /** A File (docs/domain.md): reference material kept as uploaded, in the server's bucket. */
 export interface StoredFile {
@@ -16,19 +17,7 @@ export interface StoredFile {
 const kb = (n: number) => (n < 1024 * 1024 ? `${Math.ceil(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 const isMesh = (name: string) => meshFormats.split(',').some((ext) => name.toLowerCase().endsWith(ext));
 
-/** Fetches from the Files API; a failed response throws `what` with the server's reason. */
-async function api(what: string, path: string, init?: RequestInit) {
-  const r = await fetch(`/api/files${path}`, init);
-  const type = r.headers.get('content-type') ?? '';
-  // A static host answers with a page (404, or 200 with an SPA fallback), not the API.
-  if (type.startsWith('text/html') && (r.ok || r.status === 404)) {
-    throw new Error('Files need the Brim server.');
-  }
-  if (!r.ok) {
-    throw new Error(`${what}: ${type.startsWith('application/json') ? (await r.json()).error : r.status}`);
-  }
-  return r;
-}
+const api = (what: string, path: string, init?: RequestInit) => serverApi(what, `/api/files${path}`, init);
 const report = (error_: Error) => alert(error_.message);
 
 /** The Library's Files tab. Needs the dev server; without it, says so. */

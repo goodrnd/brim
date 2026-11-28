@@ -4,7 +4,7 @@
  * Needs Playwright's Chromium (`npx playwright install chromium`).
  */
 import assert from 'node:assert/strict';
-import {mkdtemp, readdir, rm} from 'node:fs/promises';
+import {mkdtemp, readFile, readdir, rm} from 'node:fs/promises';
 import type {AddressInfo} from 'node:net';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -142,6 +142,104 @@ void test('a file becomes a part with "Make part"', async (t) => {
   // The File stays as the original.
   await page.goto(`${url}#/library/files`);
   await page.getByRole('link', {name: 'hook.stl'}).waitFor();
+});
+
+// Product pages saved from the shop, shared with the store's tests.
+const fixture = (slug: string) =>
+  readFile(new URL(`../../../packages/store/test/fixtures/${slug}.html`, import.meta.url), 'utf8');
+
+void test('the filament catalog loads from the shop, filters, and keeps the spools on hand', async (t) => {
+  // The dev server runs in this process, so its requests to the shop are answered here from saved pages.
+  const real = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    const at = new URL(typeof input === 'object' && 'url' in input ? input.url : input);
+    if (at.hostname !== 'eu.store.bambulab.com') {
+      return real(input, init);
+    }
+    const slug = at.pathname.split('/products/')[1];
+    return new Response(
+      slug
+        ? await fixture(slug)
+        : at.searchParams.get('page') === '1'
+          ? '<a href="/en/products/pa6-cf"></a><a href="/en/products/tpu-85a-tpu-90a"></a>'
+          : '',
+    );
+  });
+  const {url, page} = await start(t);
+  // The cards' images are on the shop's CDN.
+  await page.route(/^https:/, (r) => r.abort());
+  await page.goto(url);
+  await signIn(page);
+
+  await page.route('**/api/filaments', (r) => r.fulfill({status: 503}), {times: 1});
+  await page.getByRole('link', {name: 'Filament'}).click();
+  await page.getByRole('button', {name: 'Retry loading catalog'}).click();
+  await page.getByRole('heading', {name: 'No catalog yet'}).waitFor();
+  await page.getByText('Choosing a filament:', {exact: false}).click();
+  await page.getByRole('link', {name: 'PA6-CF', exact: true}).waitFor();
+  await page.getByText(/hardened-steel 0\.6 mm nozzle/).waitFor();
+  await page.getByRole('button', {name: 'Load catalog'}).click();
+  await page.getByRole('status').filter({hasText: 'Finding products on collection page'}).waitFor();
+  await page.getByRole('heading', {name: 'Bambu Lab EU · Manual refresh'}).waitFor();
+  await page.getByRole('button', {name: 'Stop refresh'}).click();
+  await page.getByText(/^Refresh stopped/).waitFor();
+  await page.getByRole('button', {name: 'Load catalog'}).click();
+  await page.getByText(/of 2 product pages read/).waitFor();
+  // Four requests to the shop, two seconds apart.
+  await page.getByText(/^Updated /).waitFor({timeout: 30_000});
+  const cards = page.locator('.filament');
+  assert.equal(await cards.count(), 14);
+  await page.getByText('Store', {exact: true}).click();
+  await page.getByRole('heading', {name: 'Bambu Lab EU · 14 colours'}).waitFor();
+  await page.getByText('Type', {exact: true}).click();
+  await page.getByRole('heading', {name: 'TPU · 13 colours'}).waitFor();
+  await page.getByRole('heading', {name: 'PA6 · 1 colour'}).waitFor();
+  await page.getByRole('heading', {level: 3, name: 'PA6-CF · 1 colour'}).waitFor();
+  await page.getByRole('heading', {level: 3, name: 'TPU 85A / TPU 90A · 13 colours'}).waitFor();
+
+  await page.getByRole('button', {name: 'Show PA6-CF in catalog'}).click();
+  await page.getByText('1 colour · PA6-CF', {exact: true}).waitFor();
+  await cards.getByText('PA6-CF nozzle and setup guide').click();
+  await cards.getByText(/hardened-steel 0\.6 mm nozzle/).waitFor();
+  await page.getByRole('searchbox', {name: 'Search filaments'}).fill('missing');
+  await page.getByText('No colours match these filters.').waitFor();
+  await page.getByRole('button', {name: 'Clear filters'}).click();
+  assert.equal(await cards.count(), 14);
+  await page.getByRole('searchbox', {name: 'Search filaments'}).fill('pa6 72100');
+  await page.getByRole('heading', {name: 'Black'}).waitFor();
+  assert.equal(await cards.count(), 1);
+  const buy = page.getByRole('link', {name: /^Buy PA6-CF Black, Filament with spool \/ 1 kg, /});
+  assert.match((await buy.getAttribute('href')) ?? '', /^https:\/\/eu\.store\.bambulab\.com\/products\/pa6-cf\?id=/);
+
+  const more = page.getByRole('button', {name: 'One spool more of PA6-CF Black'});
+  await page.route('**/api/filaments/bambu-eu-72100', (r) => r.fulfill({status: 503}), {times: 1});
+  await more.click();
+  await page.getByRole('button', {name: 'Retry saving PA6-CF Black'}).click();
+  await page.getByText('1 spool on hand', {exact: true}).waitFor();
+  // Both clicks land before the server can acknowledge the first one.
+  const release = Promise.withResolvers<void>();
+  await page.route(
+    '**/api/filaments/bambu-eu-72100',
+    async (route) => {
+      await release.promise;
+      await route.continue();
+    },
+    {times: 1},
+  );
+  try {
+    await more.dblclick();
+  } finally {
+    release.resolve();
+  }
+  await page.getByText('3 spools on hand', {exact: true}).waitFor();
+  assert.ok(await more.evaluate((button) => button === document.activeElement));
+  await page.getByRole('button', {name: 'One spool fewer of PA6-CF Black'}).click();
+  await page.getByText('2 spools on hand', {exact: true}).waitFor();
+
+  await page.reload();
+  await page.getByText('My spools (2)').click();
+  await page.getByText('2 spools on hand', {exact: true}).waitFor();
+  assert.equal(await cards.count(), 1);
 });
 
 void test('a save a closing page could not send is sent on the next visit', async (t) => {

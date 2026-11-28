@@ -12,6 +12,7 @@ Project ─┬─ Use → Part · File · Component   reference, with a quantity
 Part ── Entry              one step: prompt, changes, model
 Job                        a part at one entry, sent to a printer with a material
 Printer · Material         profiles
+Filament                   one colour of a shop's filament, with a count of spools on hand
 ```
 
 ## Terms
@@ -26,6 +27,8 @@ Printer · Material         profiles
 - **Use**: `{projectId, itemId, qty}` links a Project to a Part, File or Component. `qty` is how many to print or how many are needed; Files ignore it. One item can have Uses in many Projects.
 - **Note**: markdown body, always in one Project. Several small notes, not one document, so the user and agents can add without conflicts.
 - **Job**: one print of a Part, at `#/jobs` and `#/job/<id>`: which Part, printer, material and settings, with the slicer's time and filament estimate. `outcome` is unset while queued, then `ok` or `failed` (with an optional `note`), set by a person. A printer reporting "finished" is not `ok`: firmware only knows its commands ran.
+- **Filament**: one colour of one product line in a shop's catalog (Bambu Lab EU for now), at `#/filament`: product, colour, the maker's colour code, and Offers. Physical. `onHand` is the spools you have, and the one field a person sets; a sync from the shop replaces the rest. It is not a Material: a Material is a slicing profile, a Filament is something you buy.
+- **Offer**: one way to buy a Filament: a packaging and size at a price, in or out of stock. Buying happens on the shop's own page.
 - **Printer**, **Material**: slicing profiles. Stock presets live in `@brim/core/slicer.ts`; users edit and add their own. A Printer is a profile; with a `serial` it is also that one physical printer. Identical printers are separate Printers (duplicate, then set each serial), so each can be addressed on its own. Serials are unique; "Reset to presets" keeps Printers that have one. A Bambu Printer also names its `bambuModel` (the `bambu_model` that [bambu-printer-mcp](https://dmontgomery40.github.io/bambu-printer-mcp/reference/printer-tools) takes); Brim finds the printer's host and serial by discovery (SSDP); the access code comes from a person, is held only in the Brim server's memory and the MCP's env, and is never stored or sent to the browser.
 
 ## Rules
@@ -39,11 +42,12 @@ Printer · Material         profiles
 - Jobs are history: never delete them in bulk. Removing one Job by hand is fine.
 - A Job's run has three separate facts: did the send reach the printer (`dispatch`), what the firmware reported (`run`), and is the part good (`outcome`). Only a person sets `outcome`; `cancelled` is not `failed`.
 - A Job is sent once. Printing again makes a new Job; resending after an `unconfirmed` dispatch can print twice.
+- The filament catalog is read from the shop only after a person loads it; after that it refreshes daily. A sync never changes `onHand`, and a Filament the shop drops stays while there are spools of it on hand.
 - Job is process-neutral on purpose; Printer stays "Printer". A second process (laser, CNC) gets its own profile type beside it, not a generic "Machine".
 
 ## Status
 
-Built: Part, Entry, Job, Printer, Material, Project, Note, Use (Parts only; `qty` has no UI yet and is always 1), File. Notes are plain text for now. Bambu Printers can be found on the LAN and connected for live status; access codes are re-entered after a server restart.
+Built: Part, Entry, Job, Printer, Material, Project, Note, Use (Parts only; `qty` has no UI yet and is always 1), File, Filament (needs the server; a Job does not name one yet). Notes are plain text for now. Bambu Printers can be found on the LAN and connected for live status; access codes are re-entered after a server restart.
 
 Storage (`@brim/store`): the dev server keeps everything in SQLite (Kysely on `node:sqlite`) and file bytes in a local bucket named by sha256, both in `.brim/`. A mesh Entry stores its triangles in the bucket and names them by `sha256`. A static build without the server still uses localStorage and drops mesh entries.
 
@@ -75,7 +79,7 @@ Live progress (percent, layer, temperatures) is read from the printer, never sto
 
 - MCP edits: change the Part in place (labelled by `source`) or work on a copy?
 - Job outcome beyond ok/failed (photos, measurements, camera frames from `counterpart_print_record`). Printed Parts kept as stock ("3 brackets in the drawer") would come from `ok` Jobs.
-- Spools: read live from the printer, never stored; a Job keeps the ones it used.
+- Spools loaded in a printer: read live, never stored; a Job keeps the ones it used. Whether they tie to a Filament's `onHand` is open.
 - A Use pinned to one Entry, so a Project can hold an older version of a Part.
 - Project parameters and relations between Parts (lid fits box): the next expansion.
 - If inventory grows (storage locations, suppliers, reorder levels), it becomes its own Inventory area beside the Library.

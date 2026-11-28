@@ -394,3 +394,32 @@ textarea.mono {
 .flip {
   transform: rotate(180deg);
 }
+
+.filament-filters {
+  flex-wrap: wrap;
+}
+.filaments {
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+.filament {
+  display: grid;
+  align-content: start;
+  gap: var(--semantic-dimension-space-gap-small);
+  padding: var(--semantic-dimension-space-padding-medium);
+  border: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+  border-radius: var(--semantic-dimension-radius-medium);
+}
+.filament > img,
+.filament > .gallery-empty {
+  inline-size: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+}
+.swatch {
+  flex: none;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border: var(--semantic-dimension-border-width-default) solid var(--semantic-color-border-secondary);
+  border-radius: var(--semantic-dimension-radius-full);
+  object-fit: cover;
+}
