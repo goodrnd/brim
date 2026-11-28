@@ -23,6 +23,7 @@ import {
   PrintIcon,
   ScheduleIcon,
   SettingsIcon,
+  ShelvesIcon,
 } from './ui/icons.ts';
 import {applyOps, describe, editMesh, finalize, parsePrompt, type Model} from '@brim/core/model.ts';
 import {
@@ -32,6 +33,7 @@ import {
   type Printer,
   type SliceSettings,
 } from '@brim/core/slicer.ts';
+import {Filaments} from './filament/Filaments.tsx';
 import {Home} from './home/Home.tsx';
 import {Jobs, type Job} from './jobs/Jobs.tsx';
 import {Library} from './library/Library.tsx';
@@ -340,6 +342,7 @@ export function App() {
                         ['home', 'Home', HomeIcon],
                         ['design', 'Designer', AutoFixHighIcon],
                         ['library', 'Library', Inventory2Icon],
+                        ['filament', 'Filament', ShelvesIcon],
                         [
                           'jobs',
                           `Jobs${jobs.some((j) => !j.outcome) ? ` (${jobs.filter((j) => !j.outcome).length})` : ''}`,
@@ -435,6 +438,8 @@ export function App() {
               onOpen={(id) => parts.some((p) => p.id === id) && go(`part/${id}/print`)}
               job={page === 'job' ? route[1] : undefined}
             />
+          ) : page === 'filament' ? (
+            <Filaments />
           ) : page === 'account' ? (
             <AccountSettings account={account} setAccount={setAccount} onLogout={() => (setSignedIn(false), go(''))} />
           ) : page === 'settings' ? (

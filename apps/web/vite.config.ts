@@ -33,8 +33,9 @@ const setup: Plugin['configureServer'] = async (server) => {
   const data = resolve(import.meta.dirname, '../..', process.env.BRIM_DATA || '.brim');
   await mkdir(data, {recursive: true});
   const db = await openDb(join(data, 'brim.db'));
-  server.middlewares.use(storeApi(db, bucket(join(data, 'files'))));
-  server.httpServer?.on('close', () => void db.destroy());
+  const store = storeApi(db, bucket(join(data, 'files')));
+  server.middlewares.use(store);
+  server.httpServer?.on('close', () => (store.close(), void db.destroy()));
   const post =
     (answer: (body: Body, run: NonNullable<typeof llm>) => Promise<Intent | string>) =>
     async (req: IncomingMessage, res: ServerResponse) => {

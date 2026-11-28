@@ -3,7 +3,7 @@
  * Schema changes are append-only entries in `migrations`; `openDb` runs the pending ones.
  */
 import {DatabaseSync, type SQLInputValue} from 'node:sqlite';
-import {Kysely, SqliteDialect, type SqliteDatabase} from 'kysely';
+import {Kysely, SqliteDialect, type Generated, type SqliteDatabase} from 'kysely';
 import {Migrator, type Migration} from 'kysely/migration';
 
 /** A File (docs/domain.md): reference material kept as uploaded. Its bytes are in the bucket under `sha256`. */
@@ -75,6 +75,20 @@ export interface ProfileTable {
   data: string;
 }
 
+/** A Filament (docs/domain.md). A sync replaces every column but `onHand`, which a person sets. */
+export interface FilamentTable {
+  id: string; // `<shop>-<code>`
+  shop: string;
+  product: string; // the shop's product line, e.g. "PLA Basic"
+  color: string;
+  code: string; // the maker's colour code, e.g. "10100"
+  image: string | null;
+  swatch: string | null;
+  offers: string; // JSON Offer[], see filaments.ts
+  seen: number; // start (ms) of the last sync that listed it
+  onHand: Generated<number>; // spools
+}
+
 export interface SettingTable {
   key: string;
   value: string; // JSON
@@ -90,6 +104,7 @@ export interface Database {
   jobs: JobTable;
   profiles: ProfileTable;
   settings: SettingTable;
+  filaments: FilamentTable;
 }
 
 export type Db = Kysely<Database>;
@@ -177,6 +192,22 @@ const migrations = {
         .addColumn('value', text, (c) => c.notNull())
         .execute();
     },
+  },
+  '0003_filaments': {
+    up: (db) =>
+      db.schema
+        .createTable('filaments')
+        .addColumn('id', 'text', (c) => c.primaryKey())
+        .addColumn('shop', 'text', (c) => c.notNull())
+        .addColumn('product', 'text', (c) => c.notNull())
+        .addColumn('color', 'text', (c) => c.notNull())
+        .addColumn('code', 'text', (c) => c.notNull())
+        .addColumn('image', 'text')
+        .addColumn('swatch', 'text')
+        .addColumn('offers', 'text', (c) => c.notNull())
+        .addColumn('seen', 'integer', (c) => c.notNull())
+        .addColumn('onHand', 'integer', (c) => c.notNull().defaultTo(0))
+        .execute(),
   },
 } satisfies Record<string, Migration>;
 

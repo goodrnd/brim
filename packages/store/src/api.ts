@@ -9,11 +9,16 @@
  *   POST   /api/files?name=…       raw bytes in the body, MIME type in content-type → the new File
  *   GET    /api/files/<id>         the bytes, as a download
  *   DELETE /api/files/<id>         removes the File and its Uses; its bytes go when no other File has them
+ *   GET    /api/filaments          {filaments, synced, syncing, error}, see filaments.ts
+ *   POST   /api/filaments/sync     starts reading the shop again; 202 at once, poll the list
+ *   PUT    /api/filaments/<id>     {onHand}: the spools a person has
  */
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {pipeline} from 'node:stream/promises';
+import {bambuEu} from './bambu.ts';
 import {tooLarge, type Bucket} from './bucket.ts';
 import type {Db, FileTable} from './db.ts';
+import {filamentCatalog, type Crawl} from './filaments.ts';
 import {collections, readState, writeCollection, type Collection, type Json} from './state.ts';
 
 const idRe = /^[0-9a-f-]{36}$/;
@@ -36,7 +41,9 @@ async function text(req: IncomingMessage) {
   return Buffer.concat(chunks).toString();
 }
 
-export function storeApi(db: Db, files: Bucket) {
+export function storeApi(db: Db, files: Bucket, crawl: Crawl = bambuEu) {
+  const filaments = filamentCatalog(db, crawl);
+
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const send = (status: number, value: unknown) => {
       res.statusCode = status;
@@ -77,6 +84,29 @@ export function storeApi(db: Db, files: Bucket) {
         }
       } catch (error) {
         return send(400, {error: (error as Error).message});
+      }
+      return send(404, {error: 'not found'});
+    }
+
+    if (area === 'filaments') {
+      if (req.method === 'GET' && !id) {
+        return send(200, await filaments.list());
+      }
+      if (req.method === 'POST' && id === 'sync') {
+        void filaments.sync();
+        return send(202, {});
+      }
+      if (req.method === 'PUT' && id) {
+        let onHand;
+        try {
+          ({onHand} = JSON.parse(await text(req)) as {onHand?: unknown});
+        } catch {
+          return send(400, {error: 'send JSON'});
+        }
+        if (typeof onHand !== 'number' || !Number.isInteger(onHand) || onHand < 0 || onHand > 9999) {
+          return send(400, {error: 'onHand must be a whole number of spools.'});
+        }
+        return (await filaments.setOnHand(id, onHand)) ? send(200, {onHand}) : send(404, {error: 'not found'});
       }
       return send(404, {error: 'not found'});
     }
@@ -159,8 +189,8 @@ export function storeApi(db: Db, files: Bucket) {
     return send(405, {error: 'method not allowed'});
   }
 
-  return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-    if (!/^\/api\/(state|blobs|files)(\/|\?|$)/.test(req.url ?? '')) {
+  const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    if (!/^\/api\/(state|blobs|files|filaments)(\/|\?|$)/.test(req.url ?? '')) {
       return next();
     }
     handle(req, res).catch((error: Error) => {
@@ -172,4 +202,6 @@ export function storeApi(db: Db, files: Bucket) {
       res.end(JSON.stringify({error: error.message}));
     });
   };
+  /** `close` stops the daily catalog refresh. */
+  return Object.assign(middleware, {close: filaments.close});
 }
