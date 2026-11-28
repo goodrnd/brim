@@ -171,7 +171,9 @@ void test('the filament catalog loads from the shop, filters, and keeps the spoo
   await page.goto(url);
   await signIn(page);
 
+  await page.route('**/api/filaments', (r) => r.fulfill({status: 503}), {times: 1});
   await page.getByRole('link', {name: 'Filament'}).click();
+  await page.getByRole('button', {name: 'Retry loading catalog'}).click();
   await page.getByRole('heading', {name: 'No catalog yet'}).waitFor();
   await page.getByText('Choosing a filament:', {exact: false}).click();
   await page.getByRole('link', {name: 'PA6-CF', exact: true}).waitFor();
@@ -183,6 +185,14 @@ void test('the filament catalog loads from the shop, filters, and keeps the spoo
   const cards = page.locator('.filament');
   assert.equal(await cards.count(), 14);
 
+  await page.getByRole('button', {name: 'Show PA6-CF in catalog'}).click();
+  await page.getByText('1 colour · PA6-CF', {exact: true}).waitFor();
+  await cards.getByText('PA6-CF nozzle and setup guide').click();
+  await cards.getByText(/hardened-steel 0\.6 mm nozzle/).waitFor();
+  await page.getByRole('searchbox', {name: 'Search filaments'}).fill('missing');
+  await page.getByText('No colours match these filters.').waitFor();
+  await page.getByRole('button', {name: 'Clear filters'}).click();
+  assert.equal(await cards.count(), 14);
   await page.getByRole('searchbox', {name: 'Search filaments'}).fill('pa6 72100');
   await page.getByRole('heading', {name: 'Black'}).waitFor();
   assert.equal(await cards.count(), 1);
@@ -190,17 +200,33 @@ void test('the filament catalog loads from the shop, filters, and keeps the spoo
   assert.match((await buy.getAttribute('href')) ?? '', /^https:\/\/eu\.store\.bambulab\.com\/products\/pa6-cf\?id=/);
 
   const more = page.getByRole('button', {name: 'One spool more of PA6-CF Black'});
+  await page.route('**/api/filaments/bambu-eu-72100', (r) => r.fulfill({status: 503}), {times: 1});
   await more.click();
-  await page.getByText('1 spool on hand').waitFor();
-  await more.click();
-  await page.getByText('2 spools on hand').waitFor();
+  await page.getByRole('button', {name: 'Retry saving PA6-CF Black'}).click();
+  await page.getByText('1 spool on hand', {exact: true}).waitFor();
+  // Both clicks land before the server can acknowledge the first one.
+  const release = Promise.withResolvers<void>();
+  await page.route(
+    '**/api/filaments/bambu-eu-72100',
+    async (route) => {
+      await release.promise;
+      await route.continue();
+    },
+    {times: 1},
+  );
+  try {
+    await more.dblclick();
+  } finally {
+    release.resolve();
+  }
+  await page.getByText('3 spools on hand', {exact: true}).waitFor();
+  assert.ok(await more.evaluate((button) => button === document.activeElement));
   await page.getByRole('button', {name: 'One spool fewer of PA6-CF Black'}).click();
-  await page.getByText('1 spool on hand').waitFor();
+  await page.getByText('2 spools on hand', {exact: true}).waitFor();
 
-  // The spools come back from the server, and are the whole of "My spools".
   await page.reload();
-  await page.getByText('My spools (1)').click();
-  await page.getByText('1 spool on hand').waitFor();
+  await page.getByText('My spools (2)').click();
+  await page.getByText('2 spools on hand', {exact: true}).waitFor();
   assert.equal(await cards.count(), 1);
 });
 

@@ -34,6 +34,7 @@ export interface Catalog {
   filaments: Array<Filament>;
   synced?: number; // start (ms) of the last sync that read the whole shop
   syncing: boolean;
+  found?: number; // distinct colours read during the current sync
   error?: string; // why the last sync failed
 }
 
@@ -46,6 +47,7 @@ const syncedKey = 'filaments-synced';
 export function filamentCatalog(db: Db, crawl: Crawl) {
   let syncing: Promise<void> | undefined;
   let error: string | undefined;
+  const found = new Set<string>();
 
   /** Start (ms) of the last sync that read the whole shop. */
   const synced = async () => {
@@ -55,7 +57,7 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
 
   async function run() {
     const started = Date.now();
-    let count = 0;
+    found.clear();
     for await (const batch of crawl()) {
       for (const {offers, ...filament} of batch) {
         const row = {...filament, offers: JSON.stringify(offers), seen: started};
@@ -64,10 +66,10 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
           .values(row)
           .onConflict((c) => c.column('id').doUpdateSet(row))
           .execute();
-        count++;
+        found.add(row.id);
       }
     }
-    if (!count) {
+    if (!found.size) {
       throw new Error('The shop listed no filament. Its pages may have changed.');
     }
     // Only a complete sync moves `synced`, so a failed one never makes the rows it missed look unlisted.
@@ -113,6 +115,7 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
         filaments: rows.map((r) => ({...r, offers: JSON.parse(r.offers) as Array<Offer>})),
         synced: await synced(),
         syncing: !!syncing,
+        found: syncing ? found.size : undefined,
         error,
       };
     },
