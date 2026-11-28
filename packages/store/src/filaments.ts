@@ -36,6 +36,7 @@ export interface Catalog {
   syncing: boolean;
   found?: number; // distinct colours read during the current sync
   activity?: Activity;
+  trigger?: 'manual' | 'scheduled';
   stopped?: boolean;
   error?: string; // why the last sync failed
 }
@@ -64,7 +65,9 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
     return row ? (JSON.parse(row.value) as number) : undefined;
   };
 
-  async function run() {
+  let trigger: Catalog['trigger'];
+  async function run(reason: NonNullable<Catalog['trigger']>) {
+    trigger = reason;
     const started = Date.now();
     controller = new AbortController();
     const {signal} = controller;
@@ -100,8 +103,8 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
   }
 
   /** Reads the shop again, unless a sync is already running. Rows appear as each product is read. */
-  const sync = () =>
-    (syncing ??= run()
+  const sync = (reason: NonNullable<Catalog['trigger']> = 'manual') =>
+    (syncing ??= run(reason)
       .then(
         () => void (error = undefined),
         (error_: Error) => {
@@ -118,7 +121,7 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
   const refresh = async () => {
     const at = await synced();
     if (at && Date.now() - at > 24 * hour) {
-      void sync();
+      void sync('scheduled');
     }
   };
   const check = () => void refresh().catch(() => {}); // the db is closed while the dev server restarts
@@ -145,6 +148,7 @@ export function filamentCatalog(db: Db, crawl: Crawl) {
         filaments: rows.map((r) => ({...r, offers: JSON.parse(r.offers) as Array<Offer>})),
         synced: await synced(),
         syncing: !!syncing,
+        trigger,
         stopped: stopped || undefined,
         activity: syncing ? activity : undefined,
         found: syncing ? found.size : undefined,

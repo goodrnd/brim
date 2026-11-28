@@ -180,6 +180,7 @@ void test('the filament catalog loads from the shop, filters, and keeps the spoo
   await page.getByText(/hardened-steel 0\.6 mm nozzle/).waitFor();
   await page.getByRole('button', {name: 'Load catalog'}).click();
   await page.getByRole('status').filter({hasText: 'Finding products on collection page'}).waitFor();
+  await page.getByRole('heading', {name: 'Bambu Lab EU · Manual refresh'}).waitFor();
   await page.getByRole('button', {name: 'Stop refresh'}).click();
   await page.getByText(/^Refresh stopped/).waitFor();
   await page.getByRole('button', {name: 'Load catalog'}).click();
@@ -188,6 +189,11 @@ void test('the filament catalog loads from the shop, filters, and keeps the spoo
   await page.getByText(/^Updated /).waitFor({timeout: 30_000});
   const cards = page.locator('.filament');
   assert.equal(await cards.count(), 14);
+  await page.getByText('Store', {exact: true}).click();
+  await page.getByRole('heading', {name: 'Bambu Lab EU · 14 colours'}).waitFor();
+  await page.getByText('Type', {exact: true}).click();
+  await page.getByRole('heading', {name: 'TPU · 13 colours'}).waitFor();
+  await page.getByRole('heading', {name: 'PA6 · 1 colour'}).waitFor();
 
   await page.getByRole('button', {name: 'Show PA6-CF in catalog'}).click();
   await page.getByText('1 colour · PA6-CF', {exact: true}).waitFor();

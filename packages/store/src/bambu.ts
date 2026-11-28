@@ -6,8 +6,9 @@
 import {setTimeout as sleep} from 'node:timers/promises';
 import type {Activity, CatalogFilament, Offer} from './filaments.ts';
 
-const shop = 'bambu-eu';
-const base = 'https://eu.store.bambulab.com';
+import {filamentShop} from './shop.ts';
+
+const {id: shop, url: base} = filamentShop;
 
 /** The fields read from the page's JSON. Nothing in it is trusted: each is checked before use. */
 type Variant = {
