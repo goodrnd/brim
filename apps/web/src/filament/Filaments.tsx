@@ -99,6 +99,51 @@ export function Filaments() {
         </PageHeader.Description>
       </PageHeader.Root>
 
+      <details>
+        <summary>Choosing a filament: uses, nozzle sizes and printer setup</summary>
+        <p>
+          Start with what the part needs to do. Nozzle size below means the diameter of the nozzle opening, not the
+          thickness of the filament. These are starting points for the named Bambu products, not slicer presets.
+        </p>
+        <dl>
+          <dt>
+            <a href="https://eu.store.bambulab.com/products/pla-basic-filament">PLA Basic</a> · rigid models
+          </dt>
+          <dd>
+            For a desk organiser or a fit check, start with a standard 0.4 mm nozzle. A 0.2 mm nozzle can resolve finer
+            lettering, but prints more slowly. Avoid PLA for parts that need to stay stiff in a hot car.
+          </dd>
+          <dt>
+            <a href="https://eu.store.bambulab.com/products/tpu-95a-hf">TPU 95A HF</a> · flexible parts
+          </dt>
+          <dd>
+            For a soft bumper or non-slip foot, start with a 0.4 mm nozzle rather than 0.2 mm. Dry the spool before
+            printing: moisture can cause bubbles and stringing. Check feeder compatibility before loading flexible
+            filament into an AMS.
+          </dd>
+          <dt>
+            <a href="https://eu.store.bambulab.com/products/asa-filament">ASA</a> · outdoor parts
+          </dt>
+          <dd>
+            For a UV-exposed garden label, a standard 0.4 mm nozzle works. Plan for a heated bed and an enclosure to
+            limit warping, especially on larger parts. Use effective ventilation; an enclosure alone does not remove
+            fumes.
+          </dd>
+          <dt>
+            <a href="https://eu.store.bambulab.com/products/pa6-cf">PA6-CF</a> · stiff fixtures
+          </dt>
+          <dd>
+            For a rigid drilling jig, carbon-fibre-filled nylon needs a wear-resistant nozzle. A hardened-steel 0.6 mm
+            nozzle reduces clogging risk compared with a smaller opening. Dry the nylon before printing and keep it dry
+            while feeding.
+          </dd>
+        </dl>
+        <p>
+          Follow the linked product’s guide for nozzle and bed temperatures, drying times and compatible build plates.
+          Filled, flexible and high-flow variants can differ even within one filament family.
+        </p>
+      </details>
+
       {catalog.error && (
         <Text className="negative" role="alert">
           The catalog could not be refreshed: {catalog.error}

@@ -173,6 +173,9 @@ void test('the filament catalog loads from the shop, filters, and keeps the spoo
 
   await page.getByRole('link', {name: 'Filament'}).click();
   await page.getByRole('heading', {name: 'No catalog yet'}).waitFor();
+  await page.getByText('Choosing a filament:', {exact: false}).click();
+  await page.getByRole('link', {name: 'PA6-CF', exact: true}).waitFor();
+  await page.getByText(/hardened-steel 0\.6 mm nozzle/).waitFor();
   await page.getByRole('button', {name: 'Load catalog'}).click();
   await page.getByRole('status').filter({hasText: 'Reading the shop'}).waitFor();
   // Four requests to the shop, two seconds apart.
