@@ -25,6 +25,20 @@ const shopName = (id: string) => (id === filamentShop.id ? filamentShop.name : i
 const filamentType = (product: string) =>
   /^(PLA|PETG|PET|ABS|ASA|TPU|PA6|PAHT|PC|PPA|PPS|PVA|Support)\b/i.exec(product)?.[1] ?? 'Other';
 
+function groupFilaments(rows: Array<Filament>, label: (f: Filament) => string) {
+  const groups = new Map<string, Array<Filament>>();
+  for (const f of rows) {
+    const key = label(f);
+    const group = groups.get(key);
+    if (group) {
+      group.push(f);
+    } else {
+      groups.set(key, [f]);
+    }
+  }
+  return [...groups];
+}
+
 const money = (price: number, currency: string) =>
   new Intl.NumberFormat(undefined, {style: 'currency', currency}).format(price);
 const guides = [
@@ -170,16 +184,9 @@ export function Filaments() {
       words.every((w) => text.includes(w))
     );
   });
-  const groups = new Map<string, Array<Filament>>();
-  for (const f of shown) {
-    const key = groupBy === 'Store' ? shopName(f.shop) : groupBy === 'Type' ? filamentType(f.product) : '';
-    const group = groups.get(key);
-    if (group) {
-      group.push(f);
-    } else {
-      groups.set(key, [f]);
-    }
-  }
+  const groups = groupFilaments(shown, (f) =>
+    groupBy === 'Store' ? shopName(f.shop) : groupBy === 'Type' ? filamentType(f.product) : '',
+  );
   const {activity} = catalog;
   const products = [...new Set(catalog.filaments.map((f) => f.product))].sort();
   const spools = catalog.filaments.reduce((n, f) => n + f.onHand, 0);
@@ -422,76 +429,85 @@ export function Filaments() {
                   : 'No colours match these filters.'}
             </Text>
           ) : (
-            [...groups].map(([label, rows]) => (
+            groups.map(([label, rows]) => (
               <div key={label}>
                 {label && (
                   <Heading level={2} size={4}>
                     {label} · {count(rows.length, 'colour')}
                   </Heading>
                 )}
-                <ul className="gallery filaments">
-                  {rows.map((f) => {
-                    const name = `${f.product} ${f.color}`;
-                    const guide = guides.find((g) => g.name === f.product);
-                    return (
-                      <li key={f.id} className="filament">
-                        {f.image ? <img src={f.image} alt="" loading="lazy" /> : <div className="gallery-empty" />}
-                        <Stack direction="row" gap="small" align="center">
-                          {f.swatch && <img className="swatch" src={f.swatch} alt="" loading="lazy" />}
-                          <Heading level={2} size={5}>
-                            {f.color}
-                          </Heading>
-                        </Stack>
-                        <Text className="muted">
-                          {f.product} · {f.code} · {shopName(f.shop)}
-                        </Text>
-                        {guide && (
-                          <details>
-                            <summary>{guide.name} nozzle and setup guide</summary>
-                            <p>{guide.tip}</p>
-                            <a href={guide.url}>Manufacturer’s guide</a>
-                          </details>
-                        )}
-                        {listed(f) ? (
-                          f.offers.map((o) => (
-                            <ButtonLink
-                              key={o.url}
-                              href={o.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              hierarchy="secondary"
-                              density="compact"
-                              iconEnd={<OpenInNewIcon />}
-                              aria-label={`Buy ${name}, ${o.label}, ${money(o.price, o.currency)}${o.inStock ? '' : ', out of stock'}`}
-                            >
-                              {o.label} · {money(o.price, o.currency)}
-                              {o.inStock ? '' : ' · out of stock'}
-                            </ButtonLink>
-                          ))
-                        ) : (
-                          <Text className="muted">No longer in the shop.</Text>
-                        )}
-                        <Stack direction="row" gap="xSmall" align="center">
-                          <IconButton
-                            aria-label={`One spool fewer of ${name}`}
-                            aria-disabled={!(pending.get(f.id) ?? f.onHand)}
-                            onClick={() => (targets.current.get(f.id) ?? f.onHand) > 0 && void save(f, -1)}
-                          >
-                            <RemoveIcon />
-                          </IconButton>
-                          <Text>{f.onHand ? `${count(f.onHand, 'spool')} on hand` : 'None on hand'}</Text>
-                          <IconButton
-                            aria-label={`One spool more of ${name}`}
-                            aria-disabled={(pending.get(f.id) ?? f.onHand) >= 9999}
-                            onClick={() => (targets.current.get(f.id) ?? f.onHand) < 9999 && void save(f, 1)}
-                          >
-                            <AddIcon />
-                          </IconButton>
-                        </Stack>
-                      </li>
-                    );
-                  })}
-                </ul>
+                {groupFilaments(rows, (f) => (groupBy === 'Type' ? f.product : '')).map(([line, colours]) => (
+                  <div key={line}>
+                    {line && (
+                      <Heading level={3} size={5}>
+                        {line} · {count(colours.length, 'colour')}
+                      </Heading>
+                    )}
+                    <ul className="gallery filaments">
+                      {colours.map((f) => {
+                        const name = `${f.product} ${f.color}`;
+                        const guide = guides.find((g) => g.name === f.product);
+                        return (
+                          <li key={f.id} className="filament">
+                            {f.image ? <img src={f.image} alt="" loading="lazy" /> : <div className="gallery-empty" />}
+                            <Stack direction="row" gap="small" align="center">
+                              {f.swatch && <img className="swatch" src={f.swatch} alt="" loading="lazy" />}
+                              <Heading level={line ? 4 : label ? 3 : 2} size={5}>
+                                {f.color}
+                              </Heading>
+                            </Stack>
+                            <Text className="muted">
+                              {f.product} · {f.code} · {shopName(f.shop)}
+                            </Text>
+                            {guide && (
+                              <details>
+                                <summary>{guide.name} nozzle and setup guide</summary>
+                                <p>{guide.tip}</p>
+                                <a href={guide.url}>Manufacturer’s guide</a>
+                              </details>
+                            )}
+                            {listed(f) ? (
+                              f.offers.map((o) => (
+                                <ButtonLink
+                                  key={o.url}
+                                  href={o.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  hierarchy="secondary"
+                                  density="compact"
+                                  iconEnd={<OpenInNewIcon />}
+                                  aria-label={`Buy ${name}, ${o.label}, ${money(o.price, o.currency)}${o.inStock ? '' : ', out of stock'}`}
+                                >
+                                  {o.label} · {money(o.price, o.currency)}
+                                  {o.inStock ? '' : ' · out of stock'}
+                                </ButtonLink>
+                              ))
+                            ) : (
+                              <Text className="muted">No longer in the shop.</Text>
+                            )}
+                            <Stack direction="row" gap="xSmall" align="center">
+                              <IconButton
+                                aria-label={`One spool fewer of ${name}`}
+                                aria-disabled={!(pending.get(f.id) ?? f.onHand)}
+                                onClick={() => (targets.current.get(f.id) ?? f.onHand) > 0 && void save(f, -1)}
+                              >
+                                <RemoveIcon />
+                              </IconButton>
+                              <Text>{f.onHand ? `${count(f.onHand, 'spool')} on hand` : 'None on hand'}</Text>
+                              <IconButton
+                                aria-label={`One spool more of ${name}`}
+                                aria-disabled={(pending.get(f.id) ?? f.onHand) >= 9999}
+                                onClick={() => (targets.current.get(f.id) ?? f.onHand) < 9999 && void save(f, 1)}
+                              >
+                                <AddIcon />
+                              </IconButton>
+                            </Stack>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
               </div>
             ))
           )}

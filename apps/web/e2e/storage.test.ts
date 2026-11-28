@@ -194,6 +194,8 @@ void test('the filament catalog loads from the shop, filters, and keeps the spoo
   await page.getByText('Type', {exact: true}).click();
   await page.getByRole('heading', {name: 'TPU · 13 colours'}).waitFor();
   await page.getByRole('heading', {name: 'PA6 · 1 colour'}).waitFor();
+  await page.getByRole('heading', {level: 3, name: 'PA6-CF · 1 colour'}).waitFor();
+  await page.getByRole('heading', {level: 3, name: 'TPU 85A / TPU 90A · 13 colours'}).waitFor();
 
   await page.getByRole('button', {name: 'Show PA6-CF in catalog'}).click();
   await page.getByText('1 colour · PA6-CF', {exact: true}).waitFor();
